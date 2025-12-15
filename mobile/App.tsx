@@ -70,6 +70,7 @@ export default function App() {
   const [nowPlaying, setNowPlaying] = useState<Movie[]>([])
   const [recommend, setRecommend] = useState<Movie[]>([])
   const [wishlist, setWishlist] = useState<WishlistItem[]>([])
+  const [recommendedList, setRecommendedList] = useState<WishlistItem[]>([])
   const [notes, setNotes] = useState<string[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<Movie[]>([])
@@ -90,8 +91,10 @@ export default function App() {
       if (next) {
         loadMovies()
         fetchWishlist(next.uid)
+        fetchRecommended(next.uid)
       } else {
         setWishlist([])
+        setRecommendedList([])
       }
     })
     return unsub
@@ -158,6 +161,16 @@ function mergeUniqueMovies(base: Movie[], incoming: Movie[]) {
     }
   }
 
+  async function fetchRecommended(uid: string) {
+    try {
+      const snap = await getDoc(doc(db, 'recommended', uid))
+      const items = (snap.exists() ? (snap.data().items as WishlistItem[]) : []) ?? []
+      setRecommendedList(items)
+    } catch (err) {
+      console.error('recommended load error', err)
+    }
+  }
+
   async function handleAuth() {
     if (!email.trim() || !password) {
       Alert.alert('입력 필요', '이메일과 비밀번호를 입력하세요.')
@@ -205,6 +218,20 @@ function mergeUniqueMovies(base: Movie[], incoming: Movie[]) {
       : [...wishlist, { id: movie.id, title: movie.title, poster: movie.poster }]
     await setDoc(docRef, { items: next }, { merge: true })
     setWishlist(next)
+  }
+
+  async function toggleRecommendedItem(movie: Movie) {
+    if (!user) {
+      Alert.alert('로그인 필요', '먼저 로그인하세요.')
+      return
+    }
+    const docRef = doc(db, 'recommended', user.uid)
+    const exists = recommendedList.find((w) => w.id === movie.id)
+    const next = exists
+      ? recommendedList.filter((w) => w.id !== movie.id)
+      : [...recommendedList, { id: movie.id, title: movie.title, poster: movie.poster }]
+    await setDoc(docRef, { items: next }, { merge: true })
+    setRecommendedList(next)
   }
 
   async function handleAddNote() {
@@ -271,6 +298,7 @@ function mergeUniqueMovies(base: Movie[], incoming: Movie[]) {
         showsHorizontalScrollIndicator={false}
         renderItem={({ item }) => {
           const picked = wishlist.some((w) => w.id === item.id)
+          const recommended = recommendedList.some((w) => w.id === item.id)
           return (
             <View style={[styles.card, { backgroundColor: c.card, borderColor: c.border }]}>
               <Image
@@ -294,6 +322,18 @@ function mergeUniqueMovies(base: Movie[], incoming: Movie[]) {
               >
                 <Text style={[styles.wishButtonText, { color: c.text, fontSize: fs(12) }]}>
                   {picked ? '♥ 찜됨' : '♡ 찜하기'}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.wishButton,
+                  recommended && styles.wishButtonActive,
+                  { borderColor: c.border, marginTop: 6 },
+                ]}
+                onPress={() => toggleRecommendedItem(item)}
+              >
+                <Text style={[styles.wishButtonText, { color: c.text, fontSize: fs(12) }]}>
+                  {recommended ? '★ 추천됨' : '☆ 추천'}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -618,6 +658,25 @@ function mergeUniqueMovies(base: Movie[], incoming: Movie[]) {
               />
             ) : (
               <Text style={{ color: c.muted }}>위시리스트가 비어 있습니다.</Text>
+            )}
+          </View>
+        )}
+
+        {currentTab === 'recommended' && (
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: c.text, fontSize: fs(18) }]}>내 추천</Text>
+            {recommendedList.length ? (
+              <Section
+                title=""
+                data={recommendedList.map((w) => ({
+                  id: w.id,
+                  title: w.title,
+                  overview: '',
+                  poster: w.poster,
+                }))}
+              />
+            ) : (
+              <Text style={{ color: c.muted }}>추천 목록이 비어 있습니다.</Text>
             )}
           </View>
         )}
