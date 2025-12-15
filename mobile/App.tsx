@@ -97,14 +97,21 @@ export default function App() {
     return unsub
   }, [])
 
-  function mapMovies(items: TmdbMovie[]): Movie[] {
-    return items.map((m) => ({
-      id: m.id,
-      title: m.title,
-      overview: m.overview,
-      poster: posterUrl(m.poster_path),
-    }))
-  }
+function mapMovies(items: TmdbMovie[]): Movie[] {
+  return items.map((m) => ({
+    id: m.id,
+    title: m.title,
+    overview: m.overview,
+    poster: posterUrl(m.poster_path),
+  }))
+}
+
+function mergeUniqueMovies(base: Movie[], incoming: Movie[]) {
+  const map = new Map<number, Movie>()
+  base.forEach((m) => map.set(m.id, m))
+  incoming.forEach((m) => map.set(m.id, m))
+  return Array.from(map.values())
+}
 
   async function loadPopular(page = 1) {
     setLoadingPopular(true)
@@ -114,7 +121,7 @@ export default function App() {
       if (page === 1) {
         setPopular(mapped)
       } else {
-        setPopular((prev) => [...prev, ...mapped])
+        setPopular((prev) => mergeUniqueMovies(prev, mapped))
       }
       setPopularPage(page)
       setHasMorePopular(mapped.length > 0)
@@ -297,13 +304,14 @@ export default function App() {
   )
 
   const PopularList = () => (
-    <FlatList
-      data={popular}
-      keyExtractor={(item) => String(item.id)}
-      renderItem={({ item }) => {
+    <View style={{ gap: 10 }}>
+      {popular.map((item) => {
         const picked = wishlist.some((w) => w.id === item.id)
         return (
-          <View style={[styles.popularCard, { backgroundColor: c.card, borderColor: c.border }]}>
+          <View
+            key={item.id}
+            style={[styles.popularCard, { backgroundColor: c.card, borderColor: c.border }]}
+          >
             <Image
               source={
                 item.poster
@@ -331,17 +339,21 @@ export default function App() {
             </View>
           </View>
         )
-      }}
-      onEndReachedThreshold={0.6}
-      onEndReached={() => {
-        if (hasMorePopular && !loadingPopular) {
-          loadPopular(popularPage + 1)
-        }
-      }}
-      ListFooterComponent={
-        loadingPopular ? <ActivityIndicator color={c.accent} style={{ marginVertical: 8 }} /> : null
-      }
-    />
+      })}
+      {hasMorePopular && (
+        <TouchableOpacity
+          style={[styles.secondaryButton, { borderColor: c.border, backgroundColor: c.card, marginTop: 6 }]}
+          onPress={() => !loadingPopular && loadPopular(popularPage + 1)}
+          activeOpacity={0.85}
+        >
+          {loadingPopular ? (
+            <ActivityIndicator color={c.accent} />
+          ) : (
+            <Text style={[styles.secondaryText, { color: c.text }]}>더 보기</Text>
+          )}
+        </TouchableOpacity>
+      )}
+    </View>
   )
 
   if (!user) {
