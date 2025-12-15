@@ -62,10 +62,14 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<Movie[]>([])
   const [loadingMovies, setLoadingMovies] = useState(false)
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark')
+  const [fontScale, setFontScale] = useState(1)
+  const [reduceMotion, setReduceMotion] = useState(false)
+  const [navOpen, setNavOpen] = useState(false)
 
   const notesRef = useMemo(() => collection(db, 'mobile-notes'), [])
-  const sectionY = useRef<Record<string, number>>({})
   const scrollRef = useRef<ScrollView>(null)
+  const sectionY = useRef<Record<string, number>>({})
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (next) => {
@@ -92,11 +96,7 @@ export default function App() {
   async function loadMovies() {
     setLoadingMovies(true)
     try {
-      const [pop, now, top] = await Promise.all([
-        fetchPopular(),
-        fetchNowPlaying(),
-        fetchTopRated(),
-      ])
+      const [pop, now, top] = await Promise.all([fetchPopular(), fetchNowPlaying(), fetchTopRated()])
       setPopular(mapMovies(pop.slice(0, 10)))
       setNowPlaying(mapMovies(now.slice(0, 10)))
       setRecommend(mapMovies(top.slice(0, 10)))
@@ -198,12 +198,25 @@ export default function App() {
       setLoadingMovies(true)
       const results = await searchMovies(searchQuery.trim())
       setSearchResults(mapMovies(results.slice(0, 12)))
-      sectionY.current['search'] && scrollRef.current?.scrollTo({ y: sectionY.current['search'], animated: true })
+      const y = sectionY.current['search']
+      if (y != null && scrollRef.current) {
+        scrollRef.current.scrollTo({ y, animated: !reduceMotion })
+      }
     } catch (err) {
       console.error(err)
       Alert.alert('검색 오류', '검색 결과를 불러오지 못했습니다.')
     } finally {
       setLoadingMovies(false)
+    }
+  }
+
+  const c = theme === 'dark' ? palette.dark : palette.light
+  const fs = (size: number) => size * fontScale
+  const scrollToSection = (key: string) => {
+    const y = sectionY.current[key]
+    if (y != null && scrollRef.current) {
+      scrollRef.current.scrollTo({ y, animated: !reduceMotion })
+      setNavOpen(false)
     }
   }
 
@@ -222,7 +235,7 @@ export default function App() {
         onLayout?.(e.nativeEvent.layout.y)
       }}
     >
-      <Text style={styles.sectionTitle}>{title}</Text>
+      <Text style={[styles.sectionTitle, { color: c.text, fontSize: fs(16) }]}>{title}</Text>
       <FlatList
         data={data}
         keyExtractor={(item) => String(item.id)}
@@ -231,7 +244,7 @@ export default function App() {
         renderItem={({ item }) => {
           const picked = wishlist.some((w) => w.id === item.id)
           return (
-            <View style={styles.card}>
+            <View style={[styles.card, { backgroundColor: c.card, borderColor: c.border }]}>
               <Image
                 source={
                   item.poster
@@ -241,17 +254,19 @@ export default function App() {
                 style={styles.poster}
                 resizeMode="cover"
               />
-              <Text style={styles.cardTitle} numberOfLines={1}>
+              <Text style={[styles.cardTitle, { color: c.text, fontSize: fs(14) }]} numberOfLines={1}>
                 {item.title}
               </Text>
-              <Text style={styles.cardTag} numberOfLines={2}>
+              <Text style={[styles.cardTag, { color: c.muted, fontSize: fs(12) }]} numberOfLines={2}>
                 {item.overview || '줄거리가 없습니다.'}
               </Text>
               <TouchableOpacity
-                style={[styles.wishButton, picked && styles.wishButtonActive]}
+                style={[styles.wishButton, picked && styles.wishButtonActive, { borderColor: c.border }]}
                 onPress={() => toggleWishlistItem(item)}
               >
-                <Text style={styles.wishButtonText}>{picked ? '♥ 찜됨' : '♡ 찜하기'}</Text>
+                <Text style={[styles.wishButtonText, { color: c.text, fontSize: fs(12) }]}>
+                  {picked ? '♥ 찜됨' : '♡ 찜하기'}
+                </Text>
               </TouchableOpacity>
             </View>
           )
@@ -262,32 +277,42 @@ export default function App() {
 
   if (!user) {
     return (
-      <SafeAreaView style={styles.authContainer}>
+      <SafeAreaView style={[styles.authContainer, { backgroundColor: c.bg }]}>
         <StatusBar style="light" />
-        <Text style={styles.logo}>PB neteflix</Text>
-        <View style={styles.authCard}>
+        <Text style={[styles.logo, { color: c.accent }]}>PB neteflix</Text>
+        <View style={[styles.authCard, { backgroundColor: c.card, borderColor: c.border }]}>
           <View style={styles.authTabs}>
             <TouchableOpacity
-              style={[styles.authTab, mode === 'login' && styles.authTabActive]}
+              style={[
+                styles.authTab,
+                { borderColor: c.border },
+                mode === 'login' && { backgroundColor: c.accent, borderColor: c.accent },
+              ]}
               onPress={() => setMode('login')}
             >
-              <Text style={styles.authTabText}>LOGIN</Text>
+              <Text style={[styles.authTabText, { fontSize: fs(14) }]}>LOGIN</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.authTab, mode === 'signup' && styles.authTabActive]}
+              style={[
+                styles.authTab,
+                { borderColor: c.border },
+                mode === 'signup' && { backgroundColor: c.accent, borderColor: c.accent },
+              ]}
               onPress={() => setMode('signup')}
             >
-              <Text style={styles.authTabText}>SIGN UP</Text>
+              <Text style={[styles.authTabText, { fontSize: fs(14) }]}>SIGN UP</Text>
             </TouchableOpacity>
           </View>
 
-          <Text style={styles.authTitle}>{mode === 'login' ? '로그인' : 'Create account'}</Text>
+          <Text style={[styles.authTitle, { fontSize: fs(20), color: c.text }]}>
+            {mode === 'login' ? '로그인' : 'Create account'}
+          </Text>
           <TextInput
             placeholder="이메일"
             placeholderTextColor="#9ca3af"
             autoCapitalize="none"
             keyboardType="email-address"
-            style={styles.input}
+            style={[styles.input, { backgroundColor: c.card, borderColor: c.border, color: c.text }]}
             value={email}
             onChangeText={setEmail}
           />
@@ -295,7 +320,7 @@ export default function App() {
             placeholder="비밀번호"
             placeholderTextColor="#9ca3af"
             secureTextEntry
-            style={styles.input}
+            style={[styles.input, { backgroundColor: c.card, borderColor: c.border, color: c.text }]}
             value={password}
             onChangeText={setPassword}
           />
@@ -304,19 +329,23 @@ export default function App() {
               placeholder="비밀번호 확인"
               placeholderTextColor="#9ca3af"
               secureTextEntry
-              style={styles.input}
+              style={[styles.input, { backgroundColor: c.card, borderColor: c.border, color: c.text }]}
               value={passwordConfirm}
               onChangeText={setPasswordConfirm}
             />
           )}
 
           <TouchableOpacity
-            style={styles.primaryButton}
+            style={[styles.primaryButton, { backgroundColor: c.accent }]}
             onPress={handleAuth}
             disabled={busy}
             activeOpacity={0.85}
           >
-            {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>시작하기</Text>}
+            {busy ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={[styles.primaryText, { fontSize: fs(16) }]}>시작하기</Text>
+            )}
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -324,57 +353,105 @@ export default function App() {
   }
 
   return (
-    <SafeAreaView style={styles.homeContainer}>
+    <SafeAreaView style={[styles.homeContainer, { backgroundColor: c.bg }]}>
       <StatusBar style="light" />
       <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false}>
         <View style={styles.navBar}>
-          <Text style={styles.logo}>PB neteflix</Text>
-          <View style={styles.navLinks}>
-            {['HOME', 'POPULAR', 'SEARCH', 'WISHLIST', 'RECOMMENDED'].map((item) => (
-              <TouchableOpacity
-                key={item}
-                activeOpacity={0.7}
-                onPress={() => {
-                  const y = sectionY.current[item.toLowerCase()]
-                  if (y != null && scrollRef.current) {
-                    scrollRef.current.scrollTo({ y, animated: true })
-                  }
-                }}
-              >
-                <Text style={styles.navLink}>{item}</Text>
+          <Text style={[styles.logo, { color: c.accent }]}>PB neteflix</Text>
+          <TouchableOpacity
+            style={[styles.menuButton, { borderColor: c.border }]}
+            onPress={() => setNavOpen((v) => !v)}
+            activeOpacity={0.8}
+          >
+            <Text style={{ color: c.text, fontWeight: '700' }}>MENU</Text>
+          </TouchableOpacity>
+          <View style={styles.navActions}>
+            <TouchableOpacity
+              style={styles.navIconButton}
+              onPress={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+            >
+              <Text style={{ color: c.text }}>{theme === 'dark' ? '☀' : '🌙'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.navIconButton}
+              onPress={() => setFontScale((s) => Math.min(1.2, s + 0.05))}
+            >
+              <Text style={{ color: c.text }}>A+</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.navIconButton}
+              onPress={() => setFontScale((s) => Math.max(0.9, s - 0.05))}
+            >
+              <Text style={{ color: c.text }}>A-</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.navIconButton, reduceMotion && { borderColor: c.accent }]}
+              onPress={() => setReduceMotion((v) => !v)}
+            >
+              <Text style={{ color: c.text }}>⚡</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.logoutPill} onPress={handleLogout} disabled={busy}>
+              <Text style={[styles.logoutPillText, { color: c.text }]}>로그아웃</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+        {navOpen && (
+          <View style={[styles.navDropdown, { backgroundColor: c.card, borderColor: c.border }]}>
+            {[
+              ['HOME', 'home'],
+              ['POPULAR', 'popular'],
+              ['SEARCH', 'search'],
+              ['WISHLIST', 'wishlist'],
+              ['RECOMMENDED', 'recommended'],
+            ].map(([label, key]) => (
+              <TouchableOpacity key={key} onPress={() => scrollToSection(key as string)} style={styles.navRow}>
+                <Text style={[styles.navLink, { color: c.text }]}>{label}</Text>
               </TouchableOpacity>
             ))}
           </View>
-          <TouchableOpacity style={styles.logoutPill} onPress={handleLogout} disabled={busy}>
-            <Text style={styles.logoutPillText}>로그아웃</Text>
-          </TouchableOpacity>
-        </View>
+        )}
 
-        <View style={styles.hero} onLayout={(e) => (sectionY.current['home'] = e.nativeEvent.layout.y)}>
-          <Text style={styles.heroEyebrow}>FOR YOU</Text>
-          <Text style={styles.heroTitle}>TMDB API로 큐레이션된 추천</Text>
-          <Text style={styles.heroSubtitle}>인기, 상영 중, 추천 작품을 한 곳에서 만나보세요.</Text>
+        <View
+          style={styles.hero}
+          onLayout={(e) => (sectionY.current['home'] = e.nativeEvent.layout.y)}
+        >
+          <Text style={[styles.heroEyebrow, { color: c.muted }]}>FOR YOU</Text>
+          <Text style={[styles.heroTitle, { color: c.text }]}>TMDB API로 큐레이션된 추천</Text>
+          <Text style={[styles.heroSubtitle, { color: c.muted }]}>
+            인기, 상영 중, 추천 작품을 한 곳에서 만나보세요.
+          </Text>
           <View style={styles.searchRow}>
             <TextInput
               placeholder="검색어를 입력하세요"
               placeholderTextColor="#9ca3af"
-              style={styles.searchInput}
+              style={[
+                styles.searchInput,
+                { backgroundColor: c.card, borderColor: c.border, color: c.text },
+              ]}
               value={searchQuery}
               onChangeText={setSearchQuery}
               onSubmitEditing={handleSearch}
               returnKeyType="search"
             />
-            <TouchableOpacity style={styles.secondaryButton} onPress={handleSearch} activeOpacity={0.85}>
-              <Text style={styles.secondaryText}>검색</Text>
+            <TouchableOpacity
+              style={[styles.secondaryButton, { borderColor: c.border, backgroundColor: c.card }]}
+              onPress={handleSearch}
+              activeOpacity={0.85}
+            >
+              <Text style={[styles.secondaryText, { color: c.text }]}>검색</Text>
             </TouchableOpacity>
           </View>
           <View style={styles.heroButtons}>
-            <TouchableOpacity style={styles.primaryButton} onPress={handleAddNote} activeOpacity={0.85}>
+            <TouchableOpacity
+              style={[styles.primaryButton, { backgroundColor: c.accent }]}
+              onPress={handleAddNote}
+              activeOpacity={0.85}
+            >
               <Text style={styles.primaryText}>Firestore에 메모 저장</Text>
             </TouchableOpacity>
             {!!notes.length && (
-              <View style={styles.noteBubble}>
-                <Text style={styles.noteBubbleText}>{notes[0]}</Text>
+              <View style={[styles.noteBubble, { backgroundColor: c.card, borderColor: c.border }]}>
+                <Text style={[styles.noteBubbleText, { color: c.text }]}>{notes[0]}</Text>
               </View>
             )}
           </View>
@@ -404,6 +481,25 @@ export default function App() {
     </SafeAreaView>
   )
 }
+
+const palette = {
+  dark: {
+    bg: '#05070f',
+    card: '#0b1021',
+    border: '#1f2937',
+    text: '#f8fafc',
+    muted: '#9ca3af',
+    accent: '#e50914',
+  },
+  light: {
+    bg: '#f8fafc',
+    card: '#ffffff',
+    border: '#e5e7eb',
+    text: '#0f172a',
+    muted: '#475569',
+    accent: '#e50914',
+  },
+} as const
 
 const styles = StyleSheet.create({
   authContainer: {
@@ -493,6 +589,18 @@ const styles = StyleSheet.create({
     fontSize: 12,
     letterSpacing: 1,
   },
+  navActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  navIconButton: {
+    borderWidth: 1,
+    borderColor: '#1f2937',
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
   logoutPill: {
     borderRadius: 999,
     borderWidth: 1,
@@ -504,6 +612,23 @@ const styles = StyleSheet.create({
   logoutPillText: {
     color: '#cbd5e1',
     fontWeight: '600',
+  },
+  menuButton: {
+    borderRadius: 8,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginLeft: 12,
+  },
+  navDropdown: {
+    marginHorizontal: 20,
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 10,
+    marginBottom: 6,
+  },
+  navRow: {
+    paddingVertical: 6,
   },
   hero: {
     paddingHorizontal: 20,
