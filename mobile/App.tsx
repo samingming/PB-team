@@ -66,6 +66,7 @@ export default function App() {
   const [fontScale, setFontScale] = useState(1)
   const [reduceMotion, setReduceMotion] = useState(false)
   const [navOpen, setNavOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
   const notesRef = useMemo(() => collection(db, 'mobile-notes'), [])
   const scrollRef = useRef<ScrollView>(null)
@@ -367,31 +368,11 @@ export default function App() {
           </TouchableOpacity>
           <View style={styles.navActions}>
             <TouchableOpacity
-              style={styles.navIconButton}
-              onPress={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+              style={styles.menuButton}
+              onPress={() => setSettingsOpen((v) => !v)}
+              activeOpacity={0.8}
             >
-              <Text style={{ color: c.text }}>{theme === 'dark' ? '☀' : '🌙'}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.navIconButton}
-              onPress={() => setFontScale((s) => Math.min(1.2, s + 0.05))}
-            >
-              <Text style={{ color: c.text }}>A+</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.navIconButton}
-              onPress={() => setFontScale((s) => Math.max(0.9, s - 0.05))}
-            >
-              <Text style={{ color: c.text }}>A-</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.navIconButton, reduceMotion && { borderColor: c.accent }]}
-              onPress={() => setReduceMotion((v) => !v)}
-            >
-              <Text style={{ color: c.text }}>⚡</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.logoutPill} onPress={handleLogout} disabled={busy}>
-              <Text style={[styles.logoutPillText, { color: c.text }]}>로그아웃</Text>
+              <Text style={{ color: c.text, fontWeight: '700' }}>SETTINGS</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -408,6 +389,42 @@ export default function App() {
                 <Text style={[styles.navLink, { color: c.text }]}>{label}</Text>
               </TouchableOpacity>
             ))}
+          </View>
+        )}
+
+        {settingsOpen && (
+          <View style={[styles.navDropdown, { backgroundColor: c.card, borderColor: c.border }]}>
+            <TouchableOpacity
+              style={styles.navRow}
+              onPress={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+            >
+              <Text style={[styles.navLink, { color: c.text }]}>
+                테마: {theme === 'dark' ? '다크' : '라이트'}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.navRow}
+              onPress={() => setFontScale((s) => Math.min(1.2, s + 0.05))}
+            >
+              <Text style={[styles.navLink, { color: c.text }]}>글자 크게</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.navRow}
+              onPress={() => setFontScale((s) => Math.max(0.9, s - 0.05))}
+            >
+              <Text style={[styles.navLink, { color: c.text }]}>글자 작게</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.navRow}
+              onPress={() => setReduceMotion((v) => !v)}
+            >
+              <Text style={[styles.navLink, { color: c.text }]}>
+                애니메이션: {reduceMotion ? '끄기' : '켜기'}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.navRow} onPress={handleLogout} disabled={busy}>
+              <Text style={[styles.navLink, { color: c.text }]}>로그아웃</Text>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -593,13 +610,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-  },
-  navIconButton: {
-    borderWidth: 1,
-    borderColor: '#1f2937',
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    borderRadius: 8,
   },
   logoutPill: {
     borderRadius: 999,
