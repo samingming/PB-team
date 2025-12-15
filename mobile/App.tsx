@@ -1,5 +1,5 @@
 import { StatusBar } from 'expo-status-bar'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
@@ -20,7 +20,15 @@ import {
   signOut,
   type User,
 } from 'firebase/auth'
-import { addDoc, collection, getDocs, orderBy, query, serverTimestamp } from 'firebase/firestore'
+import {
+  addDoc,
+  collection,
+  deleteDoc,
+  getDocs,
+  orderBy,
+  query,
+  serverTimestamp,
+} from 'firebase/firestore'
 import { auth, db } from './firebaseConfig'
 import {
   fetchNowPlaying,
@@ -67,10 +75,9 @@ export default function App() {
   const [reduceMotion, setReduceMotion] = useState(false)
   const [navOpen, setNavOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [currentTab, setCurrentTab] = useState<'home' | 'popular' | 'search' | 'wishlist' | 'recommended'>('home')
 
   const notesRef = useMemo(() => collection(db, 'mobile-notes'), [])
-  const scrollRef = useRef<ScrollView>(null)
-  const sectionY = useRef<Record<string, number>>({})
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (next) => {
@@ -169,7 +176,7 @@ export default function App() {
     if (exists) {
       const snapshot = await getDocs(query(docRef, orderBy('id', 'asc')))
       const target = snapshot.docs.find((d) => (d.data() as { id: number }).id === movie.id)
-      if (target) await target.ref.delete()
+      if (target) await deleteDoc(target.ref)
       setWishlist((prev) => prev.filter((w) => w.id !== movie.id))
     } else {
       await addDoc(docRef, { id: movie.id, title: movie.title, poster: movie.poster })
@@ -199,10 +206,7 @@ export default function App() {
       setLoadingMovies(true)
       const results = await searchMovies(searchQuery.trim())
       setSearchResults(mapMovies(results.slice(0, 12)))
-      const y = sectionY.current['search']
-      if (y != null && scrollRef.current) {
-        scrollRef.current.scrollTo({ y, animated: !reduceMotion })
-      }
+      setCurrentTab('search')
     } catch (err) {
       console.error(err)
       Alert.alert('검색 오류', '검색 결과를 불러오지 못했습니다.')
@@ -213,13 +217,13 @@ export default function App() {
 
   const c = theme === 'dark' ? palette.dark : palette.light
   const fs = (size: number) => size * fontScale
-  const scrollToSection = (key: string) => {
-    const y = sectionY.current[key]
-    if (y != null && scrollRef.current) {
-      scrollRef.current.scrollTo({ y, animated: !reduceMotion })
-      setNavOpen(false)
-    }
-  }
+  const tabLabel = {
+    home: 'HOME',
+    popular: 'POPULAR',
+    search: 'SEARCH',
+    wishlist: 'WISHLIST',
+    recommended: 'RECOMMENDED',
+  } as const
 
   const Section = ({
     title,
@@ -356,7 +360,7 @@ export default function App() {
   return (
     <SafeAreaView style={[styles.homeContainer, { backgroundColor: c.bg }]}>
       <StatusBar style="light" />
-      <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false}>
+      <ScrollView showsVerticalScrollIndicator={false}>
         <View style={styles.navBar}>
           <Text style={[styles.logo, { color: c.accent }]}>PB neteflix</Text>
           <TouchableOpacity
@@ -378,15 +382,16 @@ export default function App() {
         </View>
         {navOpen && (
           <View style={[styles.navDropdown, { backgroundColor: c.card, borderColor: c.border }]}>
-            {[
-              ['HOME', 'home'],
-              ['POPULAR', 'popular'],
-              ['SEARCH', 'search'],
-              ['WISHLIST', 'wishlist'],
-              ['RECOMMENDED', 'recommended'],
-            ].map(([label, key]) => (
-              <TouchableOpacity key={key} onPress={() => scrollToSection(key as string)} style={styles.navRow}>
-                <Text style={[styles.navLink, { color: c.text }]}>{label}</Text>
+            {(Object.keys(tabLabel) as Array<keyof typeof tabLabel>).map((key) => (
+              <TouchableOpacity
+                key={key}
+                onPress={() => {
+                  setCurrentTab(key)
+                  setNavOpen(false)
+                }}
+                style={[styles.navRow, currentTab === key && { borderLeftWidth: 2, borderLeftColor: c.accent }]}
+              >
+                <Text style={[styles.navLink, { color: c.text }]}>{tabLabel[key]}</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -428,71 +433,128 @@ export default function App() {
           </View>
         )}
 
-        <View
-          style={styles.hero}
-          onLayout={(e) => (sectionY.current['home'] = e.nativeEvent.layout.y)}
-        >
-          <Text style={[styles.heroEyebrow, { color: c.muted }]}>FOR YOU</Text>
-          <Text style={[styles.heroTitle, { color: c.text }]}>TMDB API로 큐레이션된 추천</Text>
-          <Text style={[styles.heroSubtitle, { color: c.muted }]}>
-            인기, 상영 중, 추천 작품을 한 곳에서 만나보세요.
-          </Text>
-          <View style={styles.searchRow}>
-            <TextInput
-              placeholder="검색어를 입력하세요"
-              placeholderTextColor="#9ca3af"
-              style={[
-                styles.searchInput,
-                { backgroundColor: c.card, borderColor: c.border, color: c.text },
-              ]}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              onSubmitEditing={handleSearch}
-              returnKeyType="search"
-            />
-            <TouchableOpacity
-              style={[styles.secondaryButton, { borderColor: c.border, backgroundColor: c.card }]}
-              onPress={handleSearch}
-              activeOpacity={0.85}
-            >
-              <Text style={[styles.secondaryText, { color: c.text }]}>검색</Text>
-            </TouchableOpacity>
-          </View>
-          <View style={styles.heroButtons}>
-            <TouchableOpacity
-              style={[styles.primaryButton, { backgroundColor: c.accent }]}
-              onPress={handleAddNote}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.primaryText}>Firestore에 메모 저장</Text>
-            </TouchableOpacity>
-            {!!notes.length && (
-              <View style={[styles.noteBubble, { backgroundColor: c.card, borderColor: c.border }]}>
-                <Text style={[styles.noteBubbleText, { color: c.text }]}>{notes[0]}</Text>
+        {currentTab === 'home' && (
+          <>
+            <View style={styles.hero}>
+              <Text style={[styles.heroEyebrow, { color: c.muted }]}>FOR YOU</Text>
+              <Text style={[styles.heroTitle, { color: c.text }]}>TMDB API로 큐레이션된 추천</Text>
+              <Text style={[styles.heroSubtitle, { color: c.muted }]}>
+                인기, 상영 중, 추천 작품을 한 곳에서 만나보세요.
+              </Text>
+              <View style={styles.searchRow}>
+                <TextInput
+                  placeholder="검색어를 입력하세요"
+                  placeholderTextColor="#9ca3af"
+                  style={[
+                    styles.searchInput,
+                    { backgroundColor: c.card, borderColor: c.border, color: c.text },
+                  ]}
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  onSubmitEditing={handleSearch}
+                  returnKeyType="search"
+                />
+                <TouchableOpacity
+                  style={[styles.secondaryButton, { borderColor: c.border, backgroundColor: c.card }]}
+                  onPress={() => {
+                    handleSearch()
+                    setCurrentTab('search')
+                  }}
+                  activeOpacity={0.85}
+                >
+                  <Text style={[styles.secondaryText, { color: c.text }]}>검색</Text>
+                </TouchableOpacity>
               </View>
+              <View style={styles.heroButtons}>
+                <TouchableOpacity
+                  style={[styles.primaryButton, { backgroundColor: c.accent }]}
+                  onPress={handleAddNote}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.primaryText}>Firestore에 메모 저장</Text>
+                </TouchableOpacity>
+                {!!notes.length && (
+                  <View style={[styles.noteBubble, { backgroundColor: c.card, borderColor: c.border }]}>
+                    <Text style={[styles.noteBubbleText, { color: c.text }]}>{notes[0]}</Text>
+                  </View>
+                )}
+              </View>
+            </View>
+            {loadingMovies && <ActivityIndicator color="#e50914" style={{ marginVertical: 10 }} />}
+            <Section title="지금 가장 뜨는 영화" data={popular} />
+            <Section title="극장에서 막 나온 작품" data={nowPlaying} />
+            <Section title="추천 큐레이션" data={recommend} />
+          </>
+        )}
+
+        {currentTab === 'popular' && (
+          <>
+            <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: c.text, fontSize: fs(18) }]}>지금 가장 뜨는 영화</Text>
+              {loadingMovies ? (
+                <ActivityIndicator color="#e50914" />
+              ) : (
+                <Section title="" data={popular} />
+              )}
+            </View>
+          </>
+        )}
+
+        {currentTab === 'search' && (
+          <>
+            <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: c.text, fontSize: fs(18) }]}>검색</Text>
+              <View style={styles.searchRow}>
+                <TextInput
+                  placeholder="검색어를 입력하세요"
+                  placeholderTextColor="#9ca3af"
+                  style={[
+                    styles.searchInput,
+                    { backgroundColor: c.card, borderColor: c.border, color: c.text },
+                  ]}
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  onSubmitEditing={handleSearch}
+                  returnKeyType="search"
+                />
+                <TouchableOpacity
+                  style={[styles.secondaryButton, { borderColor: c.border, backgroundColor: c.card }]}
+                  onPress={handleSearch}
+                  activeOpacity={0.85}
+                >
+                  <Text style={[styles.secondaryText, { color: c.text }]}>검색</Text>
+                </TouchableOpacity>
+              </View>
+              {loadingMovies && <ActivityIndicator color="#e50914" style={{ marginVertical: 10 }} />}
+              {!!searchResults.length && <Section title="검색 결과" data={searchResults} />}
+            </View>
+          </>
+        )}
+
+        {currentTab === 'wishlist' && (
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: c.text, fontSize: fs(18) }]}>내 위시리스트</Text>
+            {wishlist.length ? (
+              <Section
+                title=""
+                data={wishlist.map((w) => ({
+                  id: w.id,
+                  title: w.title,
+                  overview: '',
+                  poster: w.poster,
+                }))}
+              />
+            ) : (
+              <Text style={{ color: c.muted }}>위시리스트가 비어 있습니다.</Text>
             )}
           </View>
-        </View>
-
-        {loadingMovies && <ActivityIndicator color="#e50914" style={{ marginVertical: 10 }} />}
-
-        {!!searchResults.length && (
-          <Section title="검색 결과" data={searchResults} onLayout={(y) => (sectionY.current['search'] = y)} />
         )}
-        <Section title="지금 가장 뜨는 영화" data={popular} onLayout={(y) => (sectionY.current['popular'] = y)} />
-        <Section title="극장에서 막 나온 작품" data={nowPlaying} onLayout={(y) => (sectionY.current['search'] = y)} />
-        <Section title="추천 큐레이션" data={recommend} onLayout={(y) => (sectionY.current['recommended'] = y)} />
-        {!!wishlist.length && (
-          <Section
-            title="내 위시리스트"
-            data={wishlist.map((w) => ({
-              id: w.id,
-              title: w.title,
-              overview: '',
-              poster: w.poster,
-            }))}
-            onLayout={(y) => (sectionY.current['wishlist'] = y)}
-          />
+
+        {currentTab === 'recommended' && (
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: c.text, fontSize: fs(18) }]}>추천 큐레이션</Text>
+            {loadingMovies ? <ActivityIndicator color="#e50914" /> : <Section title="" data={recommend} />}
+          </View>
         )}
       </ScrollView>
     </SafeAreaView>
