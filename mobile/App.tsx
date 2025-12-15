@@ -3,7 +3,6 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   Alert,
   FlatList,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,7 +10,9 @@ import {
   TouchableOpacity,
   View,
   ActivityIndicator,
+  Image,
 } from 'react-native'
+import { SafeAreaView } from 'react-native-safe-area-context'
 import {
   createUserWithEmailAndPassword,
   onAuthStateChanged,
@@ -29,14 +30,45 @@ interface Movie {
   title: string
   tag: string
   category: 'popular' | 'now' | 'recommend'
+  poster: string
 }
 
 const MOCK_MOVIES: Movie[] = [
-  { id: '1', title: 'Hunting Season', tag: '액션 • 서스펜스', category: 'popular' },
-  { id: '2', title: '웨이큰 업 데드맨', tag: '드라마', category: 'popular' },
-  { id: '3', title: '극장판 쥬라기', tag: '어드벤처', category: 'now' },
-  { id: '4', title: '신작 큐레이션', tag: '추천', category: 'recommend' },
-  { id: '5', title: '미드나이트 체이스', tag: '스릴러', category: 'recommend' },
+  {
+    id: '1',
+    title: 'Hunting Season',
+    tag: '액션 • 서스펜스',
+    category: 'popular',
+    poster: 'https://image.tmdb.org/t/p/w500/6SCfHI7OFE4ZKxR74owjVUuxrfO.jpg',
+  },
+  {
+    id: '2',
+    title: '웨이크 업 데드맨',
+    tag: '드라마',
+    category: 'popular',
+    poster: 'https://image.tmdb.org/t/p/w500/2JiV88Eiob3yR8eRc2c0cajV5Af.jpg',
+  },
+  {
+    id: '3',
+    title: '극장에서 막 나온 작품',
+    tag: '어드벤처',
+    category: 'now',
+    poster: 'https://image.tmdb.org/t/p/w500/4W3SKA0ELlReQoj1lUq3dywmewr.jpg',
+  },
+  {
+    id: '4',
+    title: '신작 큐레이션',
+    tag: '추천',
+    category: 'recommend',
+    poster: 'https://image.tmdb.org/t/p/w500/5YZbUmjbMa3ClvSW1Wj3D6XGolb.jpg',
+  },
+  {
+    id: '5',
+    title: '미드나이트 체이스',
+    tag: '스릴러',
+    category: 'recommend',
+    poster: 'https://image.tmdb.org/t/p/w500/lV7yYH0lGKFfBXi4hqP75b3JrGA.jpg',
+  },
 ]
 
 export default function App() {
@@ -192,11 +224,15 @@ export default function App() {
         <View style={styles.navBar}>
           <Text style={styles.logo}>PB neteflix</Text>
           <View style={styles.navLinks}>
-            <Text style={styles.navLink}>HOME</Text>
-            <Text style={styles.navLink}>POPULAR</Text>
-            <Text style={styles.navLink}>SEARCH</Text>
-            <Text style={styles.navLink}>WISHLIST</Text>
-            <Text style={styles.navLink}>RECOMMENDED</Text>
+            {['HOME', 'POPULAR', 'SEARCH', 'WISHLIST', 'RECOMMENDED'].map((item) => (
+              <TouchableOpacity
+                key={item}
+                activeOpacity={0.7}
+                onPress={() => Alert.alert(item, '웹과 동일하게 탐색을 추가할 수 있어요.')}
+              >
+                <Text style={styles.navLink}>{item}</Text>
+              </TouchableOpacity>
+            ))}
           </View>
           <TouchableOpacity style={styles.logoutPill} onPress={handleLogout} disabled={busy}>
             <Text style={styles.logoutPillText}>로그아웃</Text>
@@ -257,7 +293,7 @@ function Section({
           const picked = wishlist.has(item.id)
           return (
             <View style={styles.card}>
-              <View style={styles.poster} />
+              <Image source={{ uri: item.poster }} style={styles.poster} resizeMode="cover" />
               <Text style={styles.cardTitle} numberOfLines={1}>
                 {item.title}
               </Text>
