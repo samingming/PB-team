@@ -1,16 +1,16 @@
 import { StatusBar } from 'expo-status-bar'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
+  ActivityIndicator,
   Alert,
   FlatList,
+  Image,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
-  ActivityIndicator,
-  Image,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import {
@@ -38,7 +38,6 @@ interface Movie {
   title: string
   overview: string
   poster: string | undefined
-  category: 'popular' | 'now' | 'recommend' | 'search'
 }
 
 interface WishlistItem {
@@ -54,37 +53,39 @@ export default function App() {
   const [passwordConfirm, setPasswordConfirm] = useState('')
   const [user, setUser] = useState<User | null>(null)
   const [busy, setBusy] = useState(false)
-  const [wishlist, setWishlist] = useState<WishlistItem[]>([])
+
   const [popular, setPopular] = useState<Movie[]>([])
   const [nowPlaying, setNowPlaying] = useState<Movie[]>([])
   const [recommend, setRecommend] = useState<Movie[]>([])
+  const [wishlist, setWishlist] = useState<WishlistItem[]>([])
+  const [notes, setNotes] = useState<string[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<Movie[]>([])
   const [loadingMovies, setLoadingMovies] = useState(false)
-  const [notes, setNotes] = useState<string[]>([])
+
   const notesRef = useMemo(() => collection(db, 'mobile-notes'), [])
-  const wishlistRef = useMemo(() => collection(db, 'wishlists'), [])
+  const sectionY = useRef<Record<string, number>>({})
+  const scrollRef = useRef<ScrollView>(null)
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (next) => {
       setUser(next)
-      if (!next) {
-        setWishlist([])
-      } else {
+      if (next) {
         loadMovies()
         fetchWishlist(next.uid)
+      } else {
+        setWishlist([])
       }
     })
     return unsub
   }, [])
 
-  function mapMovies(items: TmdbMovie[], category: Movie['category']): Movie[] {
+  function mapMovies(items: TmdbMovie[]): Movie[] {
     return items.map((m) => ({
       id: m.id,
       title: m.title,
       overview: m.overview,
       poster: posterUrl(m.poster_path),
-      category,
     }))
   }
 
@@ -96,9 +97,9 @@ export default function App() {
         fetchNowPlaying(),
         fetchTopRated(),
       ])
-      setPopular(mapMovies(pop.slice(0, 10), 'popular'))
-      setNowPlaying(mapMovies(now.slice(0, 10), 'now'))
-      setRecommend(mapMovies(top.slice(0, 10), 'recommend'))
+      setPopular(mapMovies(pop.slice(0, 10)))
+      setNowPlaying(mapMovies(now.slice(0, 10)))
+      setRecommend(mapMovies(top.slice(0, 10)))
     } catch (err) {
       console.error(err)
       Alert.alert('TMDB 오류', '영화 정보를 불러오지 못했습니다.')
@@ -113,7 +114,7 @@ export default function App() {
         query(collection(db, 'wishlists', uid, 'items'), orderBy('title', 'asc')),
       )
       const items: WishlistItem[] = snapshot.docs.map((d) => {
-        const data = d.data() as { id: number; title: string; poster: string | undefined }
+        const data = d.data() as { id: number; title: string; poster?: string }
         return { id: data.id, title: data.title, poster: data.poster }
       })
       setWishlist(items)
@@ -131,7 +132,6 @@ export default function App() {
       Alert.alert('비밀번호 확인', '비밀번호가 일치하지 않습니다.')
       return
     }
-
     setBusy(true)
     try {
       if (mode === 'login') {
@@ -197,7 +197,8 @@ export default function App() {
     try {
       setLoadingMovies(true)
       const results = await searchMovies(searchQuery.trim())
-      setSearchResults(mapMovies(results.slice(0, 12), 'search'))
+      setSearchResults(mapMovies(results.slice(0, 12)))
+      sectionY.current['search'] && scrollRef.current?.scrollTo({ y: sectionY.current['search'], animated: true })
     } catch (err) {
       console.error(err)
       Alert.alert('검색 오류', '검색 결과를 불러오지 못했습니다.')
@@ -205,6 +206,59 @@ export default function App() {
       setLoadingMovies(false)
     }
   }
+
+  const Section = ({
+    title,
+    data,
+    onLayout,
+  }: {
+    title: string
+    data: Movie[]
+    onLayout?: (y: number) => void
+  }) => (
+    <View
+      style={styles.section}
+      onLayout={(e) => {
+        onLayout?.(e.nativeEvent.layout.y)
+      }}
+    >
+      <Text style={styles.sectionTitle}>{title}</Text>
+      <FlatList
+        data={data}
+        keyExtractor={(item) => String(item.id)}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        renderItem={({ item }) => {
+          const picked = wishlist.some((w) => w.id === item.id)
+          return (
+            <View style={styles.card}>
+              <Image
+                source={
+                  item.poster
+                    ? { uri: item.poster }
+                    : { uri: 'https://dummyimage.com/500x750/111827/ffffff&text=No+Image' }
+                }
+                style={styles.poster}
+                resizeMode="cover"
+              />
+              <Text style={styles.cardTitle} numberOfLines={1}>
+                {item.title}
+              </Text>
+              <Text style={styles.cardTag} numberOfLines={2}>
+                {item.overview || '줄거리가 없습니다.'}
+              </Text>
+              <TouchableOpacity
+                style={[styles.wishButton, picked && styles.wishButtonActive]}
+                onPress={() => toggleWishlistItem(item)}
+              >
+                <Text style={styles.wishButtonText}>{picked ? '♥ 찜됨' : '♡ 찜하기'}</Text>
+              </TouchableOpacity>
+            </View>
+          )
+        }}
+      />
+    </View>
+  )
 
   if (!user) {
     return (
@@ -272,7 +326,7 @@ export default function App() {
   return (
     <SafeAreaView style={styles.homeContainer}>
       <StatusBar style="light" />
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false}>
         <View style={styles.navBar}>
           <Text style={styles.logo}>PB neteflix</Text>
           <View style={styles.navLinks}>
@@ -280,7 +334,12 @@ export default function App() {
               <TouchableOpacity
                 key={item}
                 activeOpacity={0.7}
-                onPress={() => Alert.alert(item, '모바일 네비게이션은 차트 형식으로 구현되었습니다.')}
+                onPress={() => {
+                  const y = sectionY.current[item.toLowerCase()]
+                  if (y != null && scrollRef.current) {
+                    scrollRef.current.scrollTo({ y, animated: true })
+                  }
+                }}
               >
                 <Text style={styles.navLink}>{item}</Text>
               </TouchableOpacity>
@@ -291,7 +350,7 @@ export default function App() {
           </TouchableOpacity>
         </View>
 
-        <View style={styles.hero}>
+        <View style={styles.hero} onLayout={(e) => (sectionY.current['home'] = e.nativeEvent.layout.y)}>
           <Text style={styles.heroEyebrow}>FOR YOU</Text>
           <Text style={styles.heroTitle}>TMDB API로 큐레이션된 추천</Text>
           <Text style={styles.heroSubtitle}>인기, 상영 중, 추천 작품을 한 곳에서 만나보세요.</Text>
@@ -309,37 +368,26 @@ export default function App() {
               <Text style={styles.secondaryText}>검색</Text>
             </TouchableOpacity>
           </View>
+          <View style={styles.heroButtons}>
+            <TouchableOpacity style={styles.primaryButton} onPress={handleAddNote} activeOpacity={0.85}>
+              <Text style={styles.primaryText}>Firestore에 메모 저장</Text>
+            </TouchableOpacity>
+            {!!notes.length && (
+              <View style={styles.noteBubble}>
+                <Text style={styles.noteBubbleText}>{notes[0]}</Text>
+              </View>
+            )}
+          </View>
         </View>
 
         {loadingMovies && <ActivityIndicator color="#e50914" style={{ marginVertical: 10 }} />}
 
         {!!searchResults.length && (
-          <Section
-            title="검색 결과"
-            data={searchResults}
-            wishlist={wishlist}
-            onToggle={toggleWishlistItem}
-          />
+          <Section title="검색 결과" data={searchResults} onLayout={(y) => (sectionY.current['search'] = y)} />
         )}
-        <Section
-          title="지금 가장 뜨는 영화"
-          data={popular}
-          wishlist={wishlist}
-          onToggle={toggleWishlistItem}
-        />
-        <Section
-          title="극장에서 막 나온 작품"
-          data={nowPlaying}
-          wishlist={wishlist}
-          onToggle={toggleWishlistItem}
-        />
-        <Section
-          title="추천 큐레이션"
-          data={recommend}
-          wishlist={wishlist}
-          onToggle={toggleWishlistItem}
-        />
-
+        <Section title="지금 가장 뜨는 영화" data={popular} onLayout={(y) => (sectionY.current['popular'] = y)} />
+        <Section title="극장에서 막 나온 작품" data={nowPlaying} onLayout={(y) => (sectionY.current['search'] = y)} />
+        <Section title="추천 큐레이션" data={recommend} onLayout={(y) => (sectionY.current['recommended'] = y)} />
         {!!wishlist.length && (
           <Section
             title="내 위시리스트"
@@ -348,68 +396,12 @@ export default function App() {
               title: w.title,
               overview: '',
               poster: w.poster,
-              category: 'recommend',
             }))}
-            wishlist={wishlist}
-            onToggle={toggleWishlistItem}
+            onLayout={(y) => (sectionY.current['wishlist'] = y)}
           />
         )}
       </ScrollView>
     </SafeAreaView>
-  )
-}
-
-function Section({
-  title,
-  data,
-  wishlist,
-  onToggle,
-}: {
-  title: string
-  data: Movie[]
-  wishlist: WishlistItem[]
-  onToggle: (movie: Movie) => void
-}) {
-  return (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>{title}</Text>
-      <FlatList
-        data={data}
-        keyExtractor={(item) => item.id}
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        renderItem={({ item }) => {
-          const picked = wishlist.some((w) => w.id === item.id)
-          return (
-            <View style={styles.card}>
-              <Image
-                source={
-                  item.poster
-                    ? { uri: item.poster }
-                    : {
-                        uri: 'https://dummyimage.com/500x750/111827/ffffff&text=No+Image',
-                      }
-                }
-                style={styles.poster}
-                resizeMode="cover"
-              />
-              <Text style={styles.cardTitle} numberOfLines={1}>
-                {item.title}
-              </Text>
-              <Text style={styles.cardTag} numberOfLines={2}>
-                {item.overview || '줄거리가 없습니다.'}
-              </Text>
-              <TouchableOpacity
-                style={[styles.wishButton, picked && styles.wishButtonActive]}
-                onPress={() => onToggle(item)}
-              >
-                <Text style={styles.wishButtonText}>{picked ? '♥ 찜됨' : '♡ 찜하기'}</Text>
-              </TouchableOpacity>
-            </View>
-          )
-        }}
-      />
-    </View>
   )
 }
 
@@ -532,12 +524,6 @@ const styles = StyleSheet.create({
     color: '#cbd5e1',
     fontSize: 13,
   },
-  heroButtons: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 10,
-    flexWrap: 'wrap',
-  },
   searchRow: {
     flexDirection: 'row',
     gap: 8,
@@ -564,6 +550,12 @@ const styles = StyleSheet.create({
   secondaryText: {
     color: '#e5e7eb',
     fontWeight: '700',
+  },
+  heroButtons: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 10,
+    flexWrap: 'wrap',
   },
   noteBubble: {
     marginTop: 10,
