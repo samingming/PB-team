@@ -1,6 +1,6 @@
 // Firebase initialization
 // Reads config from Vite env (VITE_FIREBASE_*)
-import { initializeApp, getApps } from 'firebase/app'
+import { initializeApp, getApp, getApps, type FirebaseApp } from 'firebase/app'
 import { getAuth } from 'firebase/auth'
 import { getFirestore } from 'firebase/firestore'
 
@@ -13,8 +13,13 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID as string,
 }
 
-// Prevent re-initialization in HMR
-const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig)
+// Prevent re-initialization in HMR, and ensure type is FirebaseApp (not undefined)
+let app: FirebaseApp
+if (getApps().length) {
+  app = getApp()
+} else {
+  app = initializeApp(firebaseConfig)
+}
 
 export const auth = getAuth(app)
 export const db = getFirestore(app)
