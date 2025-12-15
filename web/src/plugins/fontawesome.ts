@@ -46,6 +46,8 @@ library.add(
   faFilterCircleXmark,
   faTrashCan,
   faThumbsUp,
+  faSliders,
+  faChevronDown,
   faVuejs,
 )
 
