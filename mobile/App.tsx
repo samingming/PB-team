@@ -1,6 +1,6 @@
 import { StatusBar } from 'expo-status-bar'
 import { useEffect, useMemo, useState } from 'react'
-import { Alert, ScrollView, Text, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native'
+import { Alert, Modal, ScrollView, Text, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import {
   createUserWithEmailAndPassword,
@@ -66,6 +66,7 @@ export default function App() {
   const [navOpen, setNavOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [currentTab, setCurrentTab] = useState<TabKey>('home')
+  const [confirmMovie, setConfirmMovie] = useState<Movie | null>(null)
 
   const notesRef = useMemo(() => collection(db, 'mobile-notes'), [])
   const closePanels = () => {
@@ -203,18 +204,7 @@ export default function App() {
     const exists = wishlist.find((w) => w.id === movie.id)
 
     if (exists) {
-      Alert.alert('삭제 확인', '위시리스트에서 삭제하시겠습니까?', [
-        { text: '취소', style: 'cancel' },
-        {
-          text: '확인',
-          style: 'destructive',
-          onPress: async () => {
-            const next = wishlist.filter((w) => w.id !== movie.id)
-            await setDoc(docRef, { items: next }, { merge: true })
-            setWishlist(next)
-          },
-        },
-      ])
+      setConfirmMovie(movie)
       return
     }
 
@@ -474,6 +464,36 @@ export default function App() {
               />
             )}
           </ScrollView>
+          <Modal visible={!!confirmMovie} transparent animationType="fade" onRequestClose={() => setConfirmMovie(null)}>
+            <TouchableWithoutFeedback onPress={() => setConfirmMovie(null)}>
+              <View style={styles.modalOverlay}>
+                <TouchableWithoutFeedback>
+                  <View style={styles.modalCard}>
+                    <Text style={styles.modalTitle}>삭제 확인</Text>
+                    <Text style={styles.modalText}>위시리스트에서 삭제하시겠습니까?</Text>
+                    <View style={styles.modalButtons}>
+                      <TouchableOpacity style={styles.modalButton} onPress={() => setConfirmMovie(null)}>
+                        <Text style={{ color: '#e5e7eb', fontWeight: '700' }}>취소</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.modalButton, styles.modalButtonPrimary]}
+                        onPress={async () => {
+                          if (!confirmMovie || !user) return
+                          const docRef = doc(db, 'wishlists', user.uid)
+                          const next = wishlist.filter((w) => w.id !== confirmMovie.id)
+                          await setDoc(docRef, { items: next }, { merge: true })
+                          setWishlist(next)
+                          setConfirmMovie(null)
+                        }}
+                      >
+                        <Text style={{ color: '#fff', fontWeight: '700' }}>확인</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </TouchableWithoutFeedback>
+              </View>
+            </TouchableWithoutFeedback>
+          </Modal>
         </View>
       </TouchableWithoutFeedback>
     </SafeAreaView>

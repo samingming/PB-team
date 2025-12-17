@@ -260,6 +260,53 @@ export const styles = StyleSheet.create({
   wishHeartActive: {
     backgroundColor: '#e50914',
   },
+  modalOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 20,
+  },
+  modalCard: {
+    width: '80%',
+    maxWidth: 320,
+    backgroundColor: '#0b1021',
+    padding: 18,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#1f2937',
+    gap: 12,
+  },
+  modalTitle: {
+    color: '#f8fafc',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  modalText: {
+    color: '#cbd5e1',
+    fontSize: 14,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 10,
+  },
+  modalButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#1f2937',
+    backgroundColor: '#0f172a',
+  },
+  modalButtonPrimary: {
+    backgroundColor: '#e50914',
+    borderColor: '#e50914',
+  },
   popularCard: {
     flexDirection: 'row',
     gap: 10,
@@ -273,6 +320,8 @@ export const styles = StyleSheet.create({
     height: 150,
     borderRadius: 8,
     backgroundColor: '#111827',
+    position: 'relative',
+    zIndex: 1,
   },
   popularBody: {
     flex: 1,
