@@ -10,9 +10,7 @@ interface Props {
   colors: ThemeColors
   fontScale: (size: number) => number
   wishlist: WishlistItem[]
-  recommended: WishlistItem[]
   onToggleWishlist: (movie: Movie) => void
-  onToggleRecommended: (movie: Movie) => void
 }
 
 export function MovieSection({
@@ -21,9 +19,7 @@ export function MovieSection({
   colors,
   fontScale,
   wishlist,
-  recommended,
   onToggleWishlist,
-  onToggleRecommended,
 }: Props) {
   const fs = fontScale
 
@@ -37,7 +33,6 @@ export function MovieSection({
         showsHorizontalScrollIndicator={false}
         renderItem={({ item }) => {
           const picked = wishlist.some((w) => w.id === item.id)
-          const rec = recommended.some((w) => w.id === item.id)
           return (
             <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <TouchableOpacity
@@ -68,18 +63,6 @@ export function MovieSection({
               <Text style={[styles.cardTag, { color: colors.muted, fontSize: fs(12) }]} numberOfLines={2}>
                 {item.overview || '줄거리가 없습니다.'}
               </Text>
-              <TouchableOpacity
-                style={[
-                  styles.wishButton,
-                  rec && styles.wishButtonActive,
-                  { borderColor: colors.border, marginTop: 6 },
-                ]}
-                onPress={() => onToggleRecommended(item)}
-              >
-                <Text style={[styles.wishButtonText, { color: colors.text, fontSize: fs(12) }]}>
-                  {rec ? '추천 취소' : '추천'}
-                </Text>
-              </TouchableOpacity>
             </View>
           )
         }}

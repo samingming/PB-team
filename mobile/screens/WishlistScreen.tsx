@@ -9,18 +9,14 @@ interface Props {
   colors: ThemeColors
   fontScale: (size: number) => number
   wishlist: WishlistItem[]
-  recommended: WishlistItem[]
   onToggleWishlist: (movie: Movie) => void
-  onToggleRecommended: (movie: Movie) => void
 }
 
 export function WishlistScreen({
   colors,
   fontScale,
   wishlist,
-  recommended,
   onToggleWishlist,
-  onToggleRecommended,
 }: Props) {
   const fs = fontScale
 
@@ -34,9 +30,7 @@ export function WishlistScreen({
           colors={colors}
           fontScale={fs}
           wishlist={wishlist}
-          recommended={recommended}
           onToggleWishlist={onToggleWishlist}
-          onToggleRecommended={onToggleRecommended}
         />
       ) : (
         <Text style={{ color: colors.muted }}>위시리스트가 비어 있습니다.</Text>

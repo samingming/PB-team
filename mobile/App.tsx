@@ -25,7 +25,6 @@ import { auth, db } from './firebaseConfig'
 import { AuthScreen } from './screens/AuthScreen'
 import { HomeScreen } from './screens/HomeScreen'
 import { PopularScreen } from './screens/PopularScreen'
-import { RecommendedScreen } from './screens/RecommendedScreen'
 import { SearchScreen } from './screens/SearchScreen'
 import { WishlistScreen } from './screens/WishlistScreen'
 import { palette, type ThemeColors } from './theme'
@@ -33,7 +32,6 @@ import { styles } from './styles'
 import {
   fetchNowPlaying,
   fetchPopular,
-  fetchTopRated,
   searchMovies,
   posterUrl,
   type TmdbMovie,
@@ -52,9 +50,7 @@ export default function App() {
   const [popularPage, setPopularPage] = useState(1)
   const [hasMorePopular, setHasMorePopular] = useState(true)
   const [nowPlaying, setNowPlaying] = useState<Movie[]>([])
-  const [recommend, setRecommend] = useState<Movie[]>([])
   const [wishlist, setWishlist] = useState<WishlistItem[]>([])
-  const [recommendedList, setRecommendedList] = useState<WishlistItem[]>([])
   const [notes, setNotes] = useState<string[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<Movie[]>([])
@@ -80,10 +76,8 @@ export default function App() {
       if (next) {
         loadMovies()
         fetchWishlist(next.uid)
-        fetchRecommended(next.uid)
       } else {
         setWishlist([])
-        setRecommendedList([])
       }
     })
     return unsub
@@ -128,10 +122,9 @@ export default function App() {
   async function loadMovies() {
     setLoadingMovies(true)
     try {
-      const [now, top] = await Promise.all([fetchNowPlaying(), fetchTopRated()])
+      const now = await fetchNowPlaying()
       await loadPopular(1)
       setNowPlaying(mapMovies(now.slice(0, 10)))
-      setRecommend(mapMovies(top.slice(0, 10)))
     } catch (err) {
       console.error(err)
       Alert.alert('TMDB 오류', '영화 정보를 불러오지 못했어요.')
@@ -147,16 +140,6 @@ export default function App() {
       setWishlist(items)
     } catch (err) {
       console.error('wishlist load error', err)
-    }
-  }
-
-  async function fetchRecommended(uid: string) {
-    try {
-      const snap = await getDoc(doc(db, 'recommended', uid))
-      const items = (snap.exists() ? (snap.data().items as WishlistItem[]) : []) ?? []
-      setRecommendedList(items)
-    } catch (err) {
-      console.error('recommended load error', err)
     }
   }
 
@@ -213,20 +196,6 @@ export default function App() {
     setWishlist(next)
   }
 
-  async function toggleRecommendedItem(movie: Movie) {
-    if (!user) {
-      Alert.alert('로그인 필요', '먼저 로그인해주세요.')
-      return
-    }
-    const docRef = doc(db, 'recommended', user.uid)
-    const exists = recommendedList.find((w) => w.id === movie.id)
-    const next = exists
-      ? recommendedList.filter((w) => w.id !== movie.id)
-      : [...recommendedList, { id: movie.id, title: movie.title, poster: movie.poster }]
-    await setDoc(docRef, { items: next }, { merge: true })
-    setRecommendedList(next)
-  }
-
   async function handleAddNote() {
     if (!user) return
     const text = `Hello from ${user.email ?? 'user'} @ ${new Date().toLocaleTimeString()}`
@@ -267,7 +236,6 @@ export default function App() {
     popular: 'POPULAR',
     search: 'SEARCH',
     wishlist: 'WISHLIST',
-    recommended: 'RECOMMENDED',
   }
 
   if (!user) {
@@ -402,14 +370,11 @@ export default function App() {
                 loadingMovies={loadingMovies}
                 popular={popular}
                 nowPlaying={nowPlaying}
-                recommend={recommend}
-                wishlist={wishlist}
-                recommended={recommendedList}
-                onToggleWishlist={toggleWishlistItem}
-                onToggleRecommended={toggleRecommendedItem}
-                setCurrentTab={setCurrentTab}
-              />
-            )}
+            wishlist={wishlist}
+            onToggleWishlist={toggleWishlistItem}
+            setCurrentTab={setCurrentTab}
+          />
+        )}
 
             {currentTab === 'popular' && (
               <PopularScreen
@@ -417,13 +382,13 @@ export default function App() {
                 fontScale={fs}
                 loading={loadingPopular}
                 popular={popular}
-                wishlist={wishlist}
-                hasMore={hasMorePopular}
-                page={popularPage}
-                onLoadMore={(nextPage) => !loadingPopular && loadPopular(nextPage)}
-                onToggleWishlist={toggleWishlistItem}
-              />
-            )}
+            wishlist={wishlist}
+            hasMore={hasMorePopular}
+            page={popularPage}
+            onLoadMore={(nextPage) => !loadingPopular && loadPopular(nextPage)}
+            onToggleWishlist={toggleWishlistItem}
+          />
+        )}
 
             {currentTab === 'search' && (
               <SearchScreen
@@ -433,37 +398,21 @@ export default function App() {
                 searchQuery={searchQuery}
                 setSearchQuery={setSearchQuery}
                 onSearch={handleSearch}
-                results={searchResults}
-                wishlist={wishlist}
-                recommended={recommendedList}
-                onToggleWishlist={toggleWishlistItem}
-                onToggleRecommended={toggleRecommendedItem}
-              />
-            )}
+            results={searchResults}
+            wishlist={wishlist}
+            onToggleWishlist={toggleWishlistItem}
+          />
+        )}
 
-            {currentTab === 'wishlist' && (
-              <WishlistScreen
-                colors={c}
-                fontScale={fs}
-                wishlist={wishlist}
-                recommended={recommendedList}
-                onToggleWishlist={toggleWishlistItem}
-                onToggleRecommended={toggleRecommendedItem}
-              />
-            )}
-
-            {currentTab === 'recommended' && (
-              <RecommendedScreen
-                colors={c}
-                fontScale={fs}
-                recommendedList={recommendedList}
-                recommendMovies={recommend}
-                wishlist={wishlist}
-                onToggleWishlist={toggleWishlistItem}
-                onToggleRecommended={toggleRecommendedItem}
-              />
-            )}
-          </ScrollView>
+        {currentTab === 'wishlist' && (
+          <WishlistScreen
+            colors={c}
+            fontScale={fs}
+            wishlist={wishlist}
+            onToggleWishlist={toggleWishlistItem}
+          />
+        )}
+      </ScrollView>
           <Modal visible={!!confirmMovie} transparent animationType="fade" onRequestClose={() => setConfirmMovie(null)}>
             <TouchableWithoutFeedback onPress={() => setConfirmMovie(null)}>
               <View style={styles.modalOverlay}>

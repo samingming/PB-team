@@ -16,11 +16,8 @@ interface Props {
   loadingMovies: boolean
   popular: Movie[]
   nowPlaying: Movie[]
-  recommend: Movie[]
   wishlist: WishlistItem[]
-  recommended: WishlistItem[]
   onToggleWishlist: (movie: Movie) => void
-  onToggleRecommended: (movie: Movie) => void
   setCurrentTab: (tab: TabKey) => void
 }
 
@@ -35,11 +32,8 @@ export function HomeScreen({
   loadingMovies,
   popular,
   nowPlaying,
-  recommend,
   wishlist,
-  recommended,
   onToggleWishlist,
-  onToggleRecommended,
   setCurrentTab,
 }: Props) {
   const fs = fontScale
@@ -98,9 +92,7 @@ export function HomeScreen({
         colors={colors}
         fontScale={fs}
         wishlist={wishlist}
-        recommended={recommended}
         onToggleWishlist={onToggleWishlist}
-        onToggleRecommended={onToggleRecommended}
       />
       <MovieSection
         title="극장에서 만나는 신작"
@@ -108,19 +100,7 @@ export function HomeScreen({
         colors={colors}
         fontScale={fs}
         wishlist={wishlist}
-        recommended={recommended}
         onToggleWishlist={onToggleWishlist}
-        onToggleRecommended={onToggleRecommended}
-      />
-      <MovieSection
-        title="추천 컬렉션"
-        data={recommend}
-        colors={colors}
-        fontScale={fs}
-        wishlist={wishlist}
-        recommended={recommended}
-        onToggleWishlist={onToggleWishlist}
-        onToggleRecommended={onToggleRecommended}
       />
     </>
   )

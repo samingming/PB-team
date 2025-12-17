@@ -1,5 +1,5 @@
 export type Mode = 'login' | 'signup'
-export type TabKey = 'home' | 'popular' | 'search' | 'wishlist' | 'recommended'
+export type TabKey = 'home' | 'popular' | 'search' | 'wishlist'
 
 export interface Movie {
   id: number

@@ -14,9 +14,7 @@ interface Props {
   onSearch: () => void
   results: Movie[]
   wishlist: WishlistItem[]
-  recommended: WishlistItem[]
   onToggleWishlist: (movie: Movie) => void
-  onToggleRecommended: (movie: Movie) => void
 }
 
 export function SearchScreen({
@@ -28,9 +26,7 @@ export function SearchScreen({
   onSearch,
   results,
   wishlist,
-  recommended,
   onToggleWishlist,
-  onToggleRecommended,
 }: Props) {
   const fs = fontScale
 
@@ -63,9 +59,7 @@ export function SearchScreen({
           colors={colors}
           fontScale={fs}
           wishlist={wishlist}
-          recommended={recommended}
           onToggleWishlist={onToggleWishlist}
-          onToggleRecommended={onToggleRecommended}
         />
       )}
     </View>
