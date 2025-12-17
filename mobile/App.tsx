@@ -1,6 +1,6 @@
 import { StatusBar } from 'expo-status-bar'
 import { useEffect, useMemo, useState } from 'react'
-import { Alert, ScrollView, Text, TouchableOpacity, View } from 'react-native'
+import { Alert, ScrollView, Text, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import {
   createUserWithEmailAndPassword,
@@ -66,6 +66,10 @@ export default function App() {
   const [navOpen, setNavOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [currentTab, setCurrentTab] = useState<TabKey>('home')
+  const closePanels = () => {
+    setNavOpen(false)
+    setSettingsOpen(false)
+  }
 
   const notesRef = useMemo(() => collection(db, 'mobile-notes'), [])
 
@@ -283,12 +287,17 @@ export default function App() {
   return (
     <SafeAreaView style={[styles.homeContainer, { backgroundColor: c.bg }]}>
       <StatusBar style="light" />
-      <ScrollView showsVerticalScrollIndicator={false}>
-        <View style={styles.navBar}>
-          <Text style={[styles.logo, { color: c.accent }]}>PB neteflix</Text>
-          <TouchableOpacity
-            style={[styles.menuButton, { borderColor: c.border }]}
-            onPress={() => {
+      <TouchableWithoutFeedback
+        onPress={() => {
+          if (navOpen || settingsOpen) closePanels()
+        }}
+      >
+        <ScrollView showsVerticalScrollIndicator={false}>
+          <View style={styles.navBar}>
+            <Text style={[styles.logo, { color: c.accent }]}>PB neteflix</Text>
+            <TouchableOpacity
+              style={[styles.menuButton, { borderColor: c.border }]}
+              onPress={() => {
               setNavOpen((v) => !v)
               setSettingsOpen(false)
             }}
@@ -316,7 +325,7 @@ export default function App() {
                 key={key}
                 onPress={() => {
                   setCurrentTab(key)
-                  setNavOpen(false)
+                  closePanels()
                 }}
                 style={[styles.navRow, currentTab === key && { borderLeftWidth: 2, borderLeftColor: c.accent }]}
               >
@@ -435,7 +444,8 @@ export default function App() {
             onToggleRecommended={toggleRecommendedItem}
           />
         )}
-      </ScrollView>
+        </ScrollView>
+      </TouchableWithoutFeedback>
     </SafeAreaView>
   )
 }
