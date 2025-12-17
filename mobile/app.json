@@ -38,9 +38,13 @@
         "messagingSenderId": "380986901872",
         "appId": "1:380986901872:web:99cbb839cf3067ad46f94d"
       },
-      "tmdbApiKey": "4949db1ffed8869c4dcc9946f367c2c8"
-      ,
-      "googleClientId": "309869010872-mngfli8na798j5e7hgnu7qp4sn928fq1.apps.googleusercontent.com"
+      "tmdbApiKey": "4949db1ffed8869c4dcc9946f367c2c8",
+      "googleAuth": {
+        "iosClientId": "309869010872-bhnn27ea4coh4t56q1df737i6amds9bl.apps.googleusercontent.com",
+        "androidClientId": "309869010872-di41gfk86ko8h76b6s3qusqsf44j31po.apps.googleusercontent.com",
+        "webClientId": "309869010872-mngfli8na798j5e7hgnu7qp4sn928fq1.apps.googleusercontent.com",
+        "expoClientId": "309869010872-mngfli8na798j5e7hgnu7qp4sn928fq1.apps.googleusercontent.com"
+      }
     }
   }
 }
