@@ -1,4 +1,7 @@
 import { StatusBar } from 'expo-status-bar'
+import * as Google from 'expo-auth-session/providers/google'
+import Constants from 'expo-constants'
+import * as WebBrowser from 'expo-web-browser'
 import { useEffect, useMemo, useState } from 'react'
 import {
   ActivityIndicator,
@@ -15,8 +18,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 import {
   createUserWithEmailAndPassword,
+  GoogleAuthProvider,
   onAuthStateChanged,
   signInWithEmailAndPassword,
+  signInWithCredential,
   signOut,
   type User,
 } from 'firebase/auth'
@@ -41,6 +46,23 @@ import {
   type TmdbMovie,
 } from './services/tmdb'
 
+WebBrowser.maybeCompleteAuthSession()
+
+type AppExtra = {
+  googleAuth?: {
+    iosClientId?: string
+    androidClientId?: string
+    webClientId?: string
+    expoClientId?: string
+  }
+}
+
+const appExtra = Constants.expoConfig?.extra as AppExtra | undefined
+const expoUsername =
+  process.env.EXPO_PUBLIC_EXPO_USERNAME ?? Constants.expoConfig?.owner ?? 'anonymous'
+const projectSlug = Constants.expoConfig?.slug ?? 'mobile'
+const proxyRedirectUri = `https://auth.expo.io/@${expoUsername}/${projectSlug}`
+
 type Mode = 'login' | 'signup'
 
 interface Movie {
@@ -63,6 +85,32 @@ export default function App() {
   const [passwordConfirm, setPasswordConfirm] = useState('')
   const [user, setUser] = useState<User | null>(null)
   const [busy, setBusy] = useState(false)
+  const googleClientIds = useMemo(
+    () => ({
+      ios: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID ?? appExtra?.googleAuth?.iosClientId,
+      android:
+        process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID ?? appExtra?.googleAuth?.androidClientId,
+      web: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? appExtra?.googleAuth?.webClientId,
+      expo: process.env.EXPO_PUBLIC_GOOGLE_EXPO_CLIENT_ID ?? appExtra?.googleAuth?.expoClientId,
+    }),
+    [],
+  )
+  const primaryGoogleClientId =
+    googleClientIds.web ?? googleClientIds.expo ?? googleClientIds.android ?? googleClientIds.ios
+  const googleAuthConfig = useMemo(
+    () =>
+      primaryGoogleClientId
+        ? {
+            clientId: primaryGoogleClientId,
+            iosClientId: googleClientIds.ios,
+            androidClientId: googleClientIds.android,
+            expoClientId: googleClientIds.expo ?? googleClientIds.web ?? primaryGoogleClientId,
+            redirectUri: proxyRedirectUri,
+          }
+        : undefined,
+    [googleClientIds.android, googleClientIds.expo, googleClientIds.ios, googleClientIds.web, primaryGoogleClientId],
+  )
+  const [googleRequest, , promptGoogleAuth] = Google.useIdTokenAuthRequest(googleAuthConfig ?? {})
 
   const [popular, setPopular] = useState<Movie[]>([])
   const [popularPage, setPopularPage] = useState(1)
@@ -192,6 +240,33 @@ function mergeUniqueMovies(base: Movie[], incoming: Movie[]) {
       const message =
         err instanceof Error ? err.message : '로그인/회원가입 중 오류가 발생했습니다.'
       Alert.alert('오류', message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleGoogleLogin() {
+    if (!primaryGoogleClientId || !googleRequest) {
+      Alert.alert('Google login not configured', 'Add the Google client ID to app.json or env.')
+      return
+    }
+    setBusy(true)
+    try {
+      const result = await promptGoogleAuth()
+      if (!result || result.type !== 'success') {
+        return
+      }
+      const params = (result as typeof result & { params?: Record<string, string> }).params
+      const idToken = params?.id_token ?? result.authentication?.idToken
+      if (!idToken) {
+        Alert.alert('Google login failed', 'Could not retrieve ID token from Google response.')
+        return
+      }
+      const credential = GoogleAuthProvider.credential(idToken)
+      await signInWithCredential(auth, credential)
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Google login failed. Please try again.'
+      Alert.alert('Google login failed', message)
     } finally {
       setBusy(false)
     }
@@ -466,6 +541,20 @@ function mergeUniqueMovies(base: Movie[], incoming: Movie[]) {
               <ActivityIndicator color="#fff" />
             ) : (
               <Text style={[styles.primaryText, { fontSize: fs(16) }]}>시작하기</Text>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.secondaryButton, styles.googleButton, { borderColor: c.border }]}
+            onPress={handleGoogleLogin}
+            disabled={busy || !primaryGoogleClientId}
+            activeOpacity={0.85}
+          >
+            {busy ? (
+              <ActivityIndicator color={c.text} />
+            ) : (
+              <Text style={[styles.secondaryText, styles.googleButtonText, { color: c.text }]}>
+                GOOGLE LOGIN
+              </Text>
             )}
           </TouchableOpacity>
         </View>
@@ -878,6 +967,15 @@ const styles = StyleSheet.create({
   secondaryText: {
     color: '#e5e7eb',
     fontWeight: '700',
+  },
+  googleButton: {
+    marginTop: 10,
+    backgroundColor: '#111827',
+    borderColor: '#1f2937',
+  },
+  googleButtonText: {
+    fontWeight: '800',
+    letterSpacing: 1,
   },
   heroButtons: {
     flexDirection: 'row',
