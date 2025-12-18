@@ -1,13 +1,12 @@
 ﻿import { StatusBar } from 'expo-status-bar'
+import { makeRedirectUri } from 'expo-auth-session'
 import * as Google from 'expo-auth-session/providers/google'
 import Constants from 'expo-constants'
 import * as WebBrowser from 'expo-web-browser'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
-  Animated,
-  Easing,
   FlatList,
   Image,
   ScrollView,
@@ -60,9 +59,7 @@ type AppExtra = {
 }
 
 const appExtra = Constants.expoConfig?.extra as AppExtra | undefined
-const expoUsername = process.env.EXPO_PUBLIC_EXPO_USERNAME ?? 'mxxng'
 const projectSlug = Constants.expoConfig?.slug ?? 'mobile'
-const proxyRedirectUri = `https://auth.expo.io/@${expoUsername}/${projectSlug}`
 
 type Mode = 'login' | 'signup'
 type TabKey = 'home' | 'popular' | 'search' | 'wishlist'
@@ -78,6 +75,144 @@ interface WishlistItem {
   id: number
   title: string
   poster: string | undefined
+}
+
+// Standalone to keep component identity stable and avoid losing focus on rerenders
+function AuthScreen({
+  mode,
+  setMode,
+  email,
+  password,
+  passwordConfirm,
+  setEmail,
+  setPassword,
+  setPasswordConfirm,
+  busy,
+  colors,
+  fontScale,
+  onSubmit,
+  onGoogleLogin,
+}: {
+  mode: Mode
+  setMode: (next: Mode) => void
+  email: string
+  password: string
+  passwordConfirm: string
+  setEmail: (value: string) => void
+  setPassword: (value: string) => void
+  setPasswordConfirm: (value: string) => void
+  busy: boolean
+  colors: ThemeColors
+  fontScale: (size: number) => number
+  onSubmit: () => void
+  onGoogleLogin: () => void
+}) {
+  const localFs = fontScale
+
+  const switchMode = (next: Mode) => {
+    if (next === mode) return
+    setMode(next)
+  }
+
+  return (
+    <>
+      <StatusBar style="light" />
+      <Text style={[styles.logo, { color: colors.accent }]}>PB neteflix</Text>
+
+      <View style={[styles.authCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={styles.authTabs}>
+          <TouchableOpacity
+            style={[
+              styles.authTab,
+              { borderColor: colors.border },
+              mode === 'login' && { backgroundColor: colors.accent, borderColor: colors.accent },
+            ]}
+            onPress={() => switchMode('login')}
+            activeOpacity={0.9}
+          >
+            <Text style={[styles.authTabText, { fontSize: localFs(14) }]}>LOGIN</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.authTab,
+              { borderColor: colors.border },
+              mode === 'signup' && { backgroundColor: colors.accent, borderColor: colors.accent },
+            ]}
+            onPress={() => switchMode('signup')}
+            activeOpacity={0.9}
+          >
+            <Text style={[styles.authTabText, { fontSize: localFs(14) }]}>SIGN UP</Text>
+          </TouchableOpacity>
+        </View>
+
+        <Text style={[styles.authTitle, { fontSize: localFs(20), color: colors.text }]}>
+          {mode === 'login' ? '로그인' : '회원가입'}
+        </Text>
+
+        <TextInput
+          placeholder="이메일"
+          placeholderTextColor="#9ca3af"
+          autoCapitalize="none"
+          keyboardType="email-address"
+          style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
+          value={email}
+          onChangeText={setEmail}
+        />
+        <TextInput
+          placeholder="비밀번호"
+          placeholderTextColor="#9ca3af"
+          secureTextEntry
+          style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
+          value={password}
+          onChangeText={setPassword}
+        />
+        {mode === 'signup' && (
+          <TextInput
+            placeholder="비밀번호 확인"
+            placeholderTextColor="#9ca3af"
+            secureTextEntry
+            style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
+            value={passwordConfirm}
+            onChangeText={setPasswordConfirm}
+          />
+        )}
+
+        <TouchableOpacity
+          style={[styles.primaryButton, { backgroundColor: colors.accent }]}
+          onPress={onSubmit}
+          disabled={busy}
+          activeOpacity={0.85}
+        >
+          {busy ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={[styles.primaryText, { fontSize: localFs(16) }]}>
+              {mode === 'login' ? '로그인하기' : '회원가입하기'}
+            </Text>
+          )}
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.googleButton, { borderColor: colors.border }]}
+          onPress={onGoogleLogin}
+          disabled={busy}
+          activeOpacity={0.85}
+        >
+          <View style={styles.googleButtonContent}>
+            <Text style={[styles.googleWord, { fontSize: localFs(16) }]}>
+              <Text style={styles.googleBlue}>G</Text>
+              <Text style={styles.googleRed}>o</Text>
+              <Text style={styles.googleYellow}>o</Text>
+              <Text style={styles.googleBlue}>g</Text>
+              <Text style={styles.googleGreen}>l</Text>
+              <Text style={styles.googleRed}>e</Text>
+            </Text>
+            <Text style={[styles.googleButtonText, { fontSize: localFs(14) }]}>로 로그인</Text>
+          </View>
+        </TouchableOpacity>
+      </View>
+    </>
+  )
 }
 
 export default function App() {
@@ -109,10 +244,20 @@ export default function App() {
             iosClientId: googleClientIds.ios,
             androidClientId: googleClientIds.android,
             expoClientId: googleClientIds.expo ?? googleClientIds.web ?? primaryGoogleClientId,
-            redirectUri: proxyRedirectUri,
+            redirectUri: makeRedirectUri({
+              useProxy: true,
+              projectNameForProxy: projectSlug,
+            } as Parameters<typeof makeRedirectUri>[0] & { useProxy: boolean }),
           }
         : undefined,
-    [googleClientIds.android, googleClientIds.expo, googleClientIds.ios, googleClientIds.web, primaryGoogleClientId],
+    [
+      googleClientIds.android,
+      googleClientIds.expo,
+      googleClientIds.ios,
+      googleClientIds.web,
+      primaryGoogleClientId,
+      projectSlug,
+    ],
   )
 
   const [googleRequest, , promptGoogleAuth] = Google.useIdTokenAuthRequest(googleAuthConfig ?? {})
@@ -133,19 +278,7 @@ export default function App() {
   const [navOpen, setNavOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [currentTab, setCurrentTab] = useState<TabKey>('home')
-  const [curtainOpen, setCurtainOpen] = useState(false)
-  const [cardLayout, setCardLayout] = useState({ width: 0, height: 0, y: 0 })
-  const curtainProgress = useRef(new Animated.Value(0)).current
   const notesRef = useMemo(() => collection(db, 'mobile-notes'), [])
-
-  useEffect(() => {
-    Animated.timing(curtainProgress, {
-      toValue: curtainOpen ? 1 : 0,
-      duration: 800,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    }).start()
-  }, [curtainOpen, curtainProgress])
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (next) => {
@@ -336,232 +469,12 @@ export default function App() {
 
   const c = theme === 'dark' ? palette.dark : palette.light
   const fs = (size: number) => size * fontScale
-  const handleStartCurtain = () => {
-    if (!curtainOpen) {
-      setCurtainOpen(true)
-    } else {
-      curtainProgress.stopAnimation()
-      curtainProgress.setValue(1)
-    }
-  }
   const tabLabel = {
     home: 'HOME',
     popular: 'POPULAR',
     search: 'SEARCH',
     wishlist: 'WISHLIST',
   } as const
-
-  const AuthScreen = ({
-    mode,
-    setMode,
-    email,
-    password,
-    passwordConfirm,
-    setEmail,
-    setPassword,
-    setPasswordConfirm,
-    busy,
-    colors,
-    fontScale,
-    onSubmit,
-    onGoogleLogin,
-    curtainOpen,
-    setCurtainOpen,
-    curtainProgress,
-    cardLayout,
-    setCardLayout,
-  }: {
-    mode: Mode
-    setMode: (next: Mode) => void
-    email: string
-    password: string
-    passwordConfirm: string
-    setEmail: (value: string) => void
-    setPassword: (value: string) => void
-    setPasswordConfirm: (value: string) => void
-    busy: boolean
-    colors: ThemeColors
-    fontScale: (size: number) => number
-    onSubmit: () => void
-    onGoogleLogin: () => void
-    curtainOpen: boolean
-    setCurtainOpen: (value: boolean) => void
-    curtainProgress: Animated.Value
-    cardLayout: { width: number; height: number; y: number }
-    setCardLayout: (next: { width: number; height: number; y: number }) => void
-  }) => {
-    const localFs = fontScale
-    const slideDistance = cardLayout.width > 0 ? cardLayout.width * 0.55 : 180
-    const leftTranslate = curtainProgress.interpolate({
-      inputRange: [0, 1],
-      outputRange: [0, -slideDistance],
-    })
-    const rightTranslate = curtainProgress.interpolate({
-      inputRange: [0, 1],
-      outputRange: [0, slideDistance],
-    })
-
-    const switchMode = (next: Mode) => {
-      if (next === mode) return
-      setMode(next)
-    }
-
-    return (
-      <>
-        <StatusBar style="light" />
-        <Text style={[styles.logo, { color: colors.accent }]}>PB neteflix</Text>
-
-        <View style={styles.curtainWrapper}>
-          <View
-            style={[styles.authCard, { backgroundColor: colors.card, borderColor: colors.border }]}
-            onLayout={({ nativeEvent }) =>
-              setCardLayout({
-                width: nativeEvent.layout.width,
-                height: nativeEvent.layout.height,
-                y: nativeEvent.layout.y,
-              })
-            }
-          >
-            <View style={styles.authTabs}>
-              <TouchableOpacity
-                style={[
-                  styles.authTab,
-                  { borderColor: colors.border },
-                  mode === 'login' && { backgroundColor: colors.accent, borderColor: colors.accent },
-                ]}
-                onPress={() => switchMode('login')}
-                activeOpacity={0.9}
-              >
-                <Text style={[styles.authTabText, { fontSize: localFs(14) }]}>LOGIN</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.authTab,
-                  { borderColor: colors.border },
-                  mode === 'signup' && { backgroundColor: colors.accent, borderColor: colors.accent },
-                ]}
-                onPress={() => switchMode('signup')}
-                activeOpacity={0.9}
-              >
-                <Text style={[styles.authTabText, { fontSize: localFs(14) }]}>SIGN UP</Text>
-              </TouchableOpacity>
-            </View>
-
-            <Text style={[styles.authTitle, { fontSize: localFs(20), color: colors.text }]}>
-              {mode === 'login' ? '로그인' : '회원가입'}
-            </Text>
-
-            <TextInput
-              placeholder="이메일"
-              placeholderTextColor="#9ca3af"
-              autoCapitalize="none"
-              keyboardType="email-address"
-              style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
-              value={email}
-              onChangeText={setEmail}
-            />
-            <TextInput
-              placeholder="비밀번호"
-              placeholderTextColor="#9ca3af"
-              secureTextEntry
-              style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
-              value={password}
-              onChangeText={setPassword}
-            />
-            {mode === 'signup' && (
-              <TextInput
-                placeholder="비밀번호 확인"
-                placeholderTextColor="#9ca3af"
-                secureTextEntry
-                style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
-                value={passwordConfirm}
-                onChangeText={setPasswordConfirm}
-              />
-            )}
-
-            <TouchableOpacity
-              style={[styles.primaryButton, { backgroundColor: colors.accent }]}
-              onPress={onSubmit}
-              disabled={busy}
-              activeOpacity={0.85}
-            >
-              {busy ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={[styles.primaryText, { fontSize: localFs(16) }]}>
-                  {mode === 'login' ? '로그인하기' : '회원가입하기'}
-                </Text>
-              )}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.googleButton, { borderColor: colors.border }]}
-              onPress={onGoogleLogin}
-              disabled={busy}
-              activeOpacity={0.85}
-            >
-            <View style={styles.googleButtonContent}>
-              <Text style={[styles.googleWord, { fontSize: localFs(16) }]}>
-                <Text style={styles.googleBlue}>G</Text>
-                <Text style={styles.googleRed}>o</Text>
-                <Text style={styles.googleYellow}>o</Text>
-                <Text style={styles.googleBlue}>g</Text>
-                <Text style={styles.googleGreen}>l</Text>
-                <Text style={styles.googleRed}>e</Text>
-              </Text>
-              <Text style={[styles.googleButtonText, { fontSize: localFs(14) }]}>로 로그인</Text>
-            </View>
-          </TouchableOpacity>
-        </View>
-
-          <View
-            style={[
-              styles.curtainOverlay,
-              { top: cardLayout.y, height: cardLayout.height },
-            ]}
-          >
-            <View style={[styles.curtainTop, { height: 0 }]} />
-            <View style={[styles.curtainBody, { height: cardLayout.height }]}>
-              <Animated.View
-                style={[
-                  styles.curtainPanel,
-                  styles.curtainLeft,
-                  { transform: [{ translateX: leftTranslate }] },
-                ]}
-              >
-                <View style={styles.curtainStripes}>
-                  {[0, 1, 2, 3, 4].map((stripe) => (
-                    <View key={`stripe-left-${stripe}`} style={styles.curtainStripe} />
-                  ))}
-                </View>
-              </Animated.View>
-              <Animated.View
-                style={[
-                  styles.curtainPanel,
-                  styles.curtainRight,
-                  { transform: [{ translateX: rightTranslate }] },
-                ]}
-              >
-                <View style={styles.curtainStripes}>
-                  {[0, 1, 2, 3, 4].map((stripe) => (
-                    <View key={`stripe-right-${stripe}`} style={styles.curtainStripe} />
-                  ))}
-                </View>
-              </Animated.View>
-            </View>
-          </View>
-        </View>
-
-        <TouchableOpacity
-          style={styles.curtainStartButton}
-          onPress={handleStartCurtain}
-          activeOpacity={0.9}
-        >
-          <Text style={styles.curtainButtonText}>시작하기</Text>
-        </TouchableOpacity>
-      </>
-    )
-  }
 
   const MovieSection = ({
     title,
@@ -601,7 +514,7 @@ export default function App() {
                   activeOpacity={0.8}
                 >
                   <Text style={{ color: '#fff', fontWeight: '800', fontSize: 18 }}>
-                    {picked ? '❤' : '❤'}
+                    {picked ? '❤️' : '🤍'}
                   </Text>
                 </TouchableOpacity>
                 <Image
@@ -668,9 +581,8 @@ export default function App() {
                 activeOpacity={0.8}
               >
                 <Text style={{ color: '#fff', fontWeight: '800', fontSize: 18 }}>
-                  {picked ? '❤' : '❤'}
-                  {picked ? '❤' : '❤'}
-                  </Text>
+                  {picked ? '❤️' : '🤍'}
+                </Text>
               </TouchableOpacity>
               <Image
                 source={
@@ -945,11 +857,6 @@ export default function App() {
           fontScale={fs}
           onSubmit={handleAuth}
           onGoogleLogin={handleGoogleLogin}
-          curtainOpen={curtainOpen}
-          setCurtainOpen={setCurtainOpen}
-          curtainProgress={curtainProgress}
-          cardLayout={cardLayout}
-          setCardLayout={setCardLayout}
         />
       </SafeAreaView>
     )
@@ -1084,6 +991,8 @@ export default function App() {
     </SafeAreaView>
   )
 }
+
+
 
 
 
