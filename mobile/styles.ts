@@ -215,7 +215,8 @@ export const styles = StyleSheet.create({
     marginBottom: 6,
   },
   navRow: {
-    paddingVertical: 6,
+    paddingVertical: 10,
+    marginBottom: 8,
   },
   hero: {
     paddingHorizontal: 20,
