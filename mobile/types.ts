@@ -6,6 +6,11 @@ export interface Movie {
   title: string
   overview: string
   poster: string | undefined
+  rating?: number
+  releaseDate?: string
+  runtime?: number
+  country?: string
+  genres?: string[]
 }
 
 export interface WishlistItem {

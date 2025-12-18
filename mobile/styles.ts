@@ -450,5 +450,10 @@ export const styles = StyleSheet.create({
   },
   popularBody: {
     flex: 1,
+    paddingRight: 50,
+    minHeight: 150,
+    maxHeight: 150,
+    justifyContent: 'flex-start',
+    gap: 4,
   },
 })

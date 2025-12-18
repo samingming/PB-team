@@ -7,6 +7,25 @@ export interface TmdbMovie {
   poster_path: string | null
   vote_average?: number
   release_date?: string
+  genre_ids?: number[]
+  origin_country?: string[]
+}
+
+interface TmdbGenre {
+  id: number
+  name: string
+}
+
+export interface TmdbMovieDetails {
+  id: number
+  title: string
+  overview: string
+  poster_path: string | null
+  vote_average?: number
+  release_date?: string
+  genres?: TmdbGenre[]
+  runtime?: number
+  production_countries?: { iso_3166_1?: string; name?: string }[]
 }
 
 const extra = Constants.expoConfig?.extra as { tmdbApiKey?: string } | undefined
@@ -43,6 +62,8 @@ export const fetchNowPlaying = () =>
 export const fetchTopRated = () => request<TmdbResponse>('/movie/top_rated').then((r) => r.results)
 export const searchMovies = (query: string) =>
   request<TmdbResponse>('/search/movie', { query }).then((r) => r.results)
+export const fetchMovieDetails = (id: number) =>
+  request<TmdbMovieDetails>(`/movie/${id}`, { append_to_response: '' })
 
 // Use a smaller width to reduce payload and speed up scrolling.
 export const posterUrl = (path: string | null) =>

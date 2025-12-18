@@ -24,6 +24,7 @@ import {
   fetchPopular,
   fetchTopRated,
   searchMovies,
+  fetchMovieDetails,
   posterUrl,
   type TmdbMovie,
 } from './services/tmdb'
@@ -79,12 +80,102 @@ export default function App() {
   }, [])
 
   function mapMovies(items: TmdbMovie[]): Movie[] {
+    const countryName = (code?: string) => {
+      const map: Record<string, string> = {
+        KR: '대한민국',
+        US: '미국',
+        JP: '일본',
+        CN: '중국',
+        GB: '영국',
+        FR: '프랑스',
+        DE: '독일',
+        FI: '핀란드',
+        SE: '스웨덴',
+        ES: '스페인',
+        IT: '이탈리아',
+        CA: '캐나다',
+        AU: '호주',
+        IN: '인도',
+        BR: '브라질',
+        MX: '멕시코',
+        RU: '러시아',
+      }
+      return code ? map[code.toUpperCase()] ?? code.toUpperCase() : undefined
+    }
+    const genreNames: Record<number, string> = {
+      28: '액션',
+      12: '모험',
+      16: '애니메이션',
+      35: '코미디',
+      80: '범죄',
+      99: '다큐멘터리',
+      18: '드라마',
+      10751: '가족',
+      14: '판타지',
+      36: '역사',
+      27: '공포',
+      10402: '음악',
+      9648: '미스터리',
+      10749: '로맨스',
+      878: 'SF',
+      10770: 'TV 영화',
+      53: '스릴러',
+      10752: '전쟁',
+      37: '서부',
+    }
     return items.map((m) => ({
       id: m.id,
       title: m.title,
       overview: m.overview,
       poster: posterUrl(m.poster_path),
+      rating: m.vote_average,
+      releaseDate: m.release_date,
+      genres: m.genre_ids?.map((id) => genreNames[id]).filter(Boolean),
+      country: countryName(m.origin_country?.[0]),
     }))
+  }
+
+  async function hydrateDetails(movies: Movie[]) {
+    const countryName = (code?: string) => {
+      const map: Record<string, string> = {
+        KR: '대한민국',
+        US: '미국',
+        JP: '일본',
+        CN: '중국',
+        GB: '영국',
+        FR: '프랑스',
+        DE: '독일',
+        FI: '핀란드',
+        SE: '스웨덴',
+        ES: '스페인',
+        IT: '이탈리아',
+        CA: '캐나다',
+        AU: '호주',
+        IN: '인도',
+        BR: '브라질',
+        MX: '멕시코',
+        RU: '러시아',
+      }
+      return code ? map[code.toUpperCase()] ?? code.toUpperCase() : undefined
+    }
+    return Promise.all(
+      movies.map(async (m) => {
+        try {
+          const detail = await fetchMovieDetails(m.id)
+          return {
+            ...m,
+            rating: detail.vote_average ?? m.rating,
+            releaseDate: detail.release_date ?? m.releaseDate,
+            runtime: detail.runtime ?? m.runtime,
+            country: countryName(detail.production_countries?.[0]?.iso_3166_1) ?? m.country,
+            genres: detail.genres?.map((g) => g.name) ?? m.genres,
+          }
+        } catch (err) {
+          console.error('detail fetch failed', err)
+          return m
+        }
+      }),
+    )
   }
 
   function mergeUniqueMovies(base: Movie[], incoming: Movie[]) {
@@ -99,7 +190,7 @@ export default function App() {
     setLoadingPopular(true)
     try {
       const pop = await fetchPopular(page)
-      const mapped = mapMovies(pop)
+      const mapped = await hydrateDetails(mapMovies(pop))
       if (popularLoadSeq.current !== requestId) return
       if (page === 1) {
         setPopular(mapped)
@@ -118,7 +209,7 @@ export default function App() {
     }
   }
 
-async function loadMovies() {
+  async function loadMovies() {
     setLoadingMovies(true)
     try {
       const now = await fetchNowPlaying()
