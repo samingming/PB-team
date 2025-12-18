@@ -1,5 +1,6 @@
 export type Mode = 'login' | 'signup'
 export type TabKey = 'home' | 'popular' | 'search' | 'wishlist'
+export type SearchSort = 'popular' | 'latest' | 'rating' | 'title'
 
 export interface Movie {
   id: number

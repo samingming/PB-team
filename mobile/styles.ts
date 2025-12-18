@@ -263,6 +263,38 @@ export const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#1f2937',
   },
+  searchHint: {
+    marginTop: 10,
+    paddingHorizontal: 6,
+    alignItems: 'center',
+  },
+  searchHintText: {
+    color: '#e50914',
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  sortSection: {
+    marginTop: 14,
+  },
+  sortLabel: {
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  sortRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  sortChip: {
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    backgroundColor: '#0b1021',
+  },
+  sortChipText: {
+    fontWeight: '700',
+  },
   secondaryButton: {
     borderRadius: 12,
     borderWidth: 1,

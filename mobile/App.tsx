@@ -1,5 +1,5 @@
 import { StatusBar } from 'expo-status-bar'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, Modal, Pressable, ScrollView, Text, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import {
@@ -28,7 +28,7 @@ import {
   posterUrl,
   type TmdbMovie,
 } from './services/tmdb'
-import type { Mode, Movie, TabKey, WishlistItem } from './types'
+import type { Mode, Movie, SearchSort, TabKey, WishlistItem } from './types'
 
 export default function App() {
   const [mode, setMode] = useState<Mode>('login')
@@ -47,6 +47,7 @@ export default function App() {
   const [wishlist, setWishlist] = useState<WishlistItem[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<Movie[]>([])
+  const [searchSort, setSearchSort] = useState<SearchSort>('popular')
   const [loadingMovies, setLoadingMovies] = useState(false)
   const [loadingPopular, setLoadingPopular] = useState(false)
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
@@ -308,7 +309,26 @@ async function toggleWishlistItem(movie: Movie) {
     setWishlist(next)
   }
 
-async function handleSearch() {
+  function sortSearchResults(list: Movie[], sort: SearchSort) {
+    const parsedDate = (value?: string) => {
+      const ts = value ? Date.parse(value) : 0
+      return Number.isFinite(ts) ? ts : 0
+    }
+    const items = [...list]
+    switch (sort) {
+      case 'latest':
+        return items.sort((a, b) => parsedDate(b.releaseDate) - parsedDate(a.releaseDate))
+      case 'rating':
+        return items.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))
+      case 'title':
+        return items.sort((a, b) => (a.title || '').localeCompare(b.title || ''))
+      case 'popular':
+      default:
+        return items
+    }
+  }
+
+  async function handleSearch() {
     if (!searchQuery.trim()) {
       setSearchResults([])
       return
@@ -317,6 +337,7 @@ async function handleSearch() {
       setLoadingMovies(true)
       const results = await searchMovies(searchQuery.trim())
       setSearchResults(mapMovies(results.slice(0, 12)))
+      setSearchSort('popular')
       setCurrentTab('search')
     } catch (err) {
       console.error(err)
@@ -325,6 +346,11 @@ async function handleSearch() {
       setLoadingMovies(false)
     }
   }
+
+  const sortedSearchResults = useMemo(
+    () => sortSearchResults(searchResults, searchSort),
+    [searchResults, searchSort],
+  )
 
 const c: ThemeColors = theme === 'dark' ? palette.dark : palette.light
   const fontSteps = [0.9, 0.95, 1, 1.05, 1.1, 1.15, 1.2] as const
@@ -670,7 +696,9 @@ const c: ThemeColors = theme === 'dark' ? palette.dark : palette.light
                 searchQuery={searchQuery}
                 setSearchQuery={setSearchQuery}
                 onSearch={handleSearch}
-                results={searchResults}
+                searchSort={searchSort}
+                setSearchSort={setSearchSort}
+                results={sortedSearchResults}
                 wishlist={wishlist}
                 onToggleWishlist={toggleWishlistItem}
               />
