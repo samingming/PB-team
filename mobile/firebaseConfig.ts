@@ -1,12 +1,7 @@
 // Firebase initialization for Expo (mobile)
 // Reads config from env (app.json / app.config.ts) via process.env.*
 import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app'
-import {
-  getAuth,
-  initializeAuth,
-  getReactNativePersistence,
-  type Auth,
-} from 'firebase/auth'
+import { getAuth, type Auth } from 'firebase/auth'
 import { getFirestore } from 'firebase/firestore'
 import Constants from 'expo-constants'
 import AsyncStorage from '@react-native-async-storage/async-storage'
@@ -51,14 +46,5 @@ if (getApps().length) {
   app = initializeApp(config)
 }
 
-let authInstance: Auth
-try {
-  authInstance = getAuth(app)
-} catch {
-  authInstance = initializeAuth(app, {
-    persistence: getReactNativePersistence(AsyncStorage),
-  })
-}
-
-export const auth = authInstance
+export const auth: Auth = getAuth(app)
 export const db = getFirestore(app)

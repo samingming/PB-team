@@ -1,15 +1,16 @@
-import { StatusBar } from 'expo-status-bar'
+﻿import { StatusBar } from 'expo-status-bar'
 import * as Google from 'expo-auth-session/providers/google'
 import Constants from 'expo-constants'
 import * as WebBrowser from 'expo-web-browser'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
+  Animated,
+  Easing,
   FlatList,
   Image,
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
@@ -40,11 +41,12 @@ import { auth, db } from './firebaseConfig'
 import {
   fetchNowPlaying,
   fetchPopular,
-  fetchTopRated,
   searchMovies,
   posterUrl,
   type TmdbMovie,
 } from './services/tmdb'
+import { styles } from './styles'
+import { palette, type ThemeColors } from './theme'
 
 WebBrowser.maybeCompleteAuthSession()
 
@@ -58,12 +60,12 @@ type AppExtra = {
 }
 
 const appExtra = Constants.expoConfig?.extra as AppExtra | undefined
-// Use explicit Expo username to build the proxy redirect URI; fallback is a known account.
 const expoUsername = process.env.EXPO_PUBLIC_EXPO_USERNAME ?? 'mxxng'
 const projectSlug = Constants.expoConfig?.slug ?? 'mobile'
 const proxyRedirectUri = `https://auth.expo.io/@${expoUsername}/${projectSlug}`
 
 type Mode = 'login' | 'signup'
+type TabKey = 'home' | 'popular' | 'search' | 'wishlist'
 
 interface Movie {
   id: number
@@ -85,18 +87,20 @@ export default function App() {
   const [passwordConfirm, setPasswordConfirm] = useState('')
   const [user, setUser] = useState<User | null>(null)
   const [busy, setBusy] = useState(false)
+
   const googleClientIds = useMemo(
     () => ({
       ios: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID ?? appExtra?.googleAuth?.iosClientId,
-      android:
-        process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID ?? appExtra?.googleAuth?.androidClientId,
+      android: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID ?? appExtra?.googleAuth?.androidClientId,
       web: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? appExtra?.googleAuth?.webClientId,
       expo: process.env.EXPO_PUBLIC_GOOGLE_EXPO_CLIENT_ID ?? appExtra?.googleAuth?.expoClientId,
     }),
     [],
   )
+
   const primaryGoogleClientId =
     googleClientIds.web ?? googleClientIds.expo ?? googleClientIds.android ?? googleClientIds.ios
+
   const googleAuthConfig = useMemo(
     () =>
       primaryGoogleClientId
@@ -110,22 +114,14 @@ export default function App() {
         : undefined,
     [googleClientIds.android, googleClientIds.expo, googleClientIds.ios, googleClientIds.web, primaryGoogleClientId],
   )
-  const [googleRequest, , promptGoogleAuth] = Google.useIdTokenAuthRequest(googleAuthConfig ?? {})
 
-  useEffect(() => {
-    console.log('Google client IDs =>', googleClientIds, 'primary =>', primaryGoogleClientId)
-    if (googleRequest) {
-      console.log('Google auth redirectUri =>', googleRequest.redirectUri)
-    }
-  }, [googleRequest, googleClientIds, primaryGoogleClientId])
+  const [googleRequest, , promptGoogleAuth] = Google.useIdTokenAuthRequest(googleAuthConfig ?? {})
 
   const [popular, setPopular] = useState<Movie[]>([])
   const [popularPage, setPopularPage] = useState(1)
   const [hasMorePopular, setHasMorePopular] = useState(true)
   const [nowPlaying, setNowPlaying] = useState<Movie[]>([])
-  const [recommend, setRecommend] = useState<Movie[]>([])
   const [wishlist, setWishlist] = useState<WishlistItem[]>([])
-  const [recommendedList, setRecommendedList] = useState<WishlistItem[]>([])
   const [notes, setNotes] = useState<string[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<Movie[]>([])
@@ -136,8 +132,7 @@ export default function App() {
   const [reduceMotion, setReduceMotion] = useState(false)
   const [navOpen, setNavOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [currentTab, setCurrentTab] = useState<'home' | 'popular' | 'search' | 'wishlist' | 'recommended'>('home')
-
+  const [currentTab, setCurrentTab] = useState<TabKey>('home')
   const notesRef = useMemo(() => collection(db, 'mobile-notes'), [])
 
   useEffect(() => {
@@ -146,30 +141,28 @@ export default function App() {
       if (next) {
         loadMovies()
         fetchWishlist(next.uid)
-        fetchRecommended(next.uid)
       } else {
         setWishlist([])
-        setRecommendedList([])
       }
     })
     return unsub
   }, [])
 
-function mapMovies(items: TmdbMovie[]): Movie[] {
-  return items.map((m) => ({
-    id: m.id,
-    title: m.title,
-    overview: m.overview,
-    poster: posterUrl(m.poster_path),
-  }))
-}
+  function mapMovies(items: TmdbMovie[]): Movie[] {
+    return items.map((m) => ({
+      id: m.id,
+      title: m.title,
+      overview: m.overview,
+      poster: posterUrl(m.poster_path),
+    }))
+  }
 
-function mergeUniqueMovies(base: Movie[], incoming: Movie[]) {
-  const map = new Map<number, Movie>()
-  base.forEach((m) => map.set(m.id, m))
-  incoming.forEach((m) => map.set(m.id, m))
-  return Array.from(map.values())
-}
+  function mergeUniqueMovies(base: Movie[], incoming: Movie[]) {
+    const map = new Map<number, Movie>()
+    base.forEach((m) => map.set(m.id, m))
+    incoming.forEach((m) => map.set(m.id, m))
+    return Array.from(map.values())
+  }
 
   async function loadPopular(page = 1) {
     setLoadingPopular(true)
@@ -185,7 +178,7 @@ function mergeUniqueMovies(base: Movie[], incoming: Movie[]) {
       setHasMorePopular(mapped.length > 0)
     } catch (err) {
       console.error(err)
-      Alert.alert('TMDB 오류', '인기 영화를 불러오지 못했습니다.')
+      Alert.alert('TMDB 오류', '인기 영화를 불러오지 못했어요.')
     } finally {
       setLoadingPopular(false)
     }
@@ -194,13 +187,12 @@ function mergeUniqueMovies(base: Movie[], incoming: Movie[]) {
   async function loadMovies() {
     setLoadingMovies(true)
     try {
-      const [now, top] = await Promise.all([fetchNowPlaying(), fetchTopRated()])
+      const now = await fetchNowPlaying()
       await loadPopular(1)
       setNowPlaying(mapMovies(now.slice(0, 10)))
-      setRecommend(mapMovies(top.slice(0, 10)))
     } catch (err) {
       console.error(err)
-      Alert.alert('TMDB 오류', '영화 정보를 불러오지 못했습니다.')
+      Alert.alert('TMDB 오류', '영화를 불러오는 중 오류가 발생했습니다.')
     } finally {
       setLoadingMovies(false)
     }
@@ -216,19 +208,9 @@ function mergeUniqueMovies(base: Movie[], incoming: Movie[]) {
     }
   }
 
-  async function fetchRecommended(uid: string) {
-    try {
-      const snap = await getDoc(doc(db, 'recommended', uid))
-      const items = (snap.exists() ? (snap.data().items as WishlistItem[]) : []) ?? []
-      setRecommendedList(items)
-    } catch (err) {
-      console.error('recommended load error', err)
-    }
-  }
-
   async function handleAuth() {
     if (!email.trim() || !password) {
-      Alert.alert('입력 필요', '이메일과 비밀번호를 입력하세요.')
+      Alert.alert('입력 확인', '이메일과 비밀번호를 입력하세요.')
       return
     }
     if (mode === 'signup' && password !== passwordConfirm) {
@@ -241,12 +223,11 @@ function mergeUniqueMovies(base: Movie[], incoming: Movie[]) {
         await signInWithEmailAndPassword(auth, email.trim(), password)
       } else {
         await createUserWithEmailAndPassword(auth, email.trim(), password)
-        Alert.alert('회원가입 완료', '로그인되었습니다.')
+        Alert.alert('회원가입 완료', '로그인해서 계속 이용해주세요.')
       }
     } catch (err: unknown) {
-      const message =
-        err instanceof Error ? err.message : '로그인/회원가입 중 오류가 발생했습니다.'
-      Alert.alert('오류', message)
+      const message = err instanceof Error ? err.message : '인증 중 오류가 발생했습니다.'
+      Alert.alert('로그인 오류', message)
     } finally {
       setBusy(false)
     }
@@ -260,7 +241,6 @@ function mergeUniqueMovies(base: Movie[], incoming: Movie[]) {
     setBusy(true)
     try {
       const result = await promptGoogleAuth()
-      console.log('Google auth result =>', result)
       if (!result || result.type !== 'success') {
         const errorMessage =
           (result as typeof result & { error?: string; params?: Record<string, string> })?.error ??
@@ -299,7 +279,7 @@ function mergeUniqueMovies(base: Movie[], incoming: Movie[]) {
 
   async function toggleWishlistItem(movie: Movie) {
     if (!user) {
-      Alert.alert('로그인 필요', '먼저 로그인하세요.')
+      Alert.alert('로그인이 필요합니다', '로그인 후 이용해주세요.')
       return
     }
     const docRef = doc(db, 'wishlists', user.uid)
@@ -311,20 +291,6 @@ function mergeUniqueMovies(base: Movie[], incoming: Movie[]) {
     setWishlist(next)
   }
 
-  async function toggleRecommendedItem(movie: Movie) {
-    if (!user) {
-      Alert.alert('로그인 필요', '먼저 로그인하세요.')
-      return
-    }
-    const docRef = doc(db, 'recommended', user.uid)
-    const exists = recommendedList.find((w) => w.id === movie.id)
-    const next = exists
-      ? recommendedList.filter((w) => w.id !== movie.id)
-      : [...recommendedList, { id: movie.id, title: movie.title, poster: movie.poster }]
-    await setDoc(docRef, { items: next }, { merge: true })
-    setRecommendedList(next)
-  }
-
   async function handleAddNote() {
     if (!user) return
     const text = `Hello from ${user.email ?? 'user'} @ ${new Date().toLocaleTimeString()}`
@@ -333,7 +299,7 @@ function mergeUniqueMovies(base: Movie[], incoming: Movie[]) {
       const snapshot = await getDocs(query(notesRef, orderBy('createdAt', 'desc')))
       setNotes(snapshot.docs.map((d) => (d.data().text as string) ?? ''))
     } catch (err) {
-      const message = err instanceof Error ? err.message : '저장에 실패했습니다.'
+      const message = err instanceof Error ? err.message : '메모 저장 중 오류가 발생했습니다.'
       Alert.alert('오류', message)
     }
   }
@@ -363,217 +329,613 @@ function mergeUniqueMovies(base: Movie[], incoming: Movie[]) {
     popular: 'POPULAR',
     search: 'SEARCH',
     wishlist: 'WISHLIST',
-    recommended: 'RECOMMENDED',
   } as const
 
-  const Section = ({
+  const AuthScreen = ({
+    mode,
+    setMode,
+    email,
+    password,
+    passwordConfirm,
+    setEmail,
+    setPassword,
+    setPasswordConfirm,
+    busy,
+    colors,
+    fontScale,
+    onSubmit,
+    onGoogleLogin,
+  }: {
+    mode: Mode
+    setMode: (next: Mode) => void
+    email: string
+    password: string
+    passwordConfirm: string
+    setEmail: (value: string) => void
+    setPassword: (value: string) => void
+    setPasswordConfirm: (value: string) => void
+    busy: boolean
+    colors: ThemeColors
+    fontScale: (size: number) => number
+    onSubmit: () => void
+    onGoogleLogin: () => void
+  }) => {
+    const localFs = fontScale
+    const [curtainOpen, setCurtainOpen] = useState(false)
+    const [cardLayout, setCardLayout] = useState({ width: 0, height: 0, y: 0 })
+    const curtainProgress = useRef(new Animated.Value(0)).current
+    const pendingMode = useRef<Mode | null>(null)
+
+    useEffect(() => {
+      Animated.timing(curtainProgress, {
+        toValue: curtainOpen ? 1 : 0,
+        duration: 800,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start(({ finished }) => {
+        if (finished && !curtainOpen && pendingMode.current) {
+          setMode(pendingMode.current)
+          pendingMode.current = null
+          setCurtainOpen(true)
+        }
+      })
+    }, [curtainOpen, curtainProgress, setMode])
+
+    const slideDistance = cardLayout.width > 0 ? cardLayout.width * 0.55 : 180
+    const leftTranslate = curtainProgress.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0, -slideDistance],
+    })
+    const rightTranslate = curtainProgress.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0, slideDistance],
+    })
+
+    const switchMode = (next: Mode) => {
+      if (next === mode) return
+      pendingMode.current = next
+      setCurtainOpen(false)
+    }
+
+    return (
+      <>
+        <StatusBar style="light" />
+        <Text style={[styles.logo, { color: colors.accent }]}>PB neteflix</Text>
+
+        <View style={styles.curtainWrapper}>
+          <View
+            style={[styles.authCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+            onLayout={({ nativeEvent }) =>
+              setCardLayout({
+                width: nativeEvent.layout.width,
+                height: nativeEvent.layout.height,
+                y: nativeEvent.layout.y,
+              })
+            }
+          >
+            <View style={styles.authTabs}>
+              <TouchableOpacity
+                style={[
+                  styles.authTab,
+                  { borderColor: colors.border },
+                  mode === 'login' && { backgroundColor: colors.accent, borderColor: colors.accent },
+                ]}
+                onPress={() => switchMode('login')}
+                activeOpacity={0.9}
+              >
+                <Text style={[styles.authTabText, { fontSize: localFs(14) }]}>LOGIN</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.authTab,
+                  { borderColor: colors.border },
+                  mode === 'signup' && { backgroundColor: colors.accent, borderColor: colors.accent },
+                ]}
+                onPress={() => switchMode('signup')}
+                activeOpacity={0.9}
+              >
+                <Text style={[styles.authTabText, { fontSize: localFs(14) }]}>SIGN UP</Text>
+              </TouchableOpacity>
+            </View>
+
+            <Text style={[styles.authTitle, { fontSize: localFs(20), color: colors.text }]}>
+              {mode === 'login' ? '로그인' : '회원가입'}
+            </Text>
+
+            <TextInput
+              placeholder="이메일"
+              placeholderTextColor="#9ca3af"
+              autoCapitalize="none"
+              keyboardType="email-address"
+              style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
+              value={email}
+              onChangeText={setEmail}
+            />
+            <TextInput
+              placeholder="비밀번호"
+              placeholderTextColor="#9ca3af"
+              secureTextEntry
+              style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
+              value={password}
+              onChangeText={setPassword}
+            />
+            {mode === 'signup' && (
+              <TextInput
+                placeholder="비밀번호 확인"
+                placeholderTextColor="#9ca3af"
+                secureTextEntry
+                style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
+                value={passwordConfirm}
+                onChangeText={setPasswordConfirm}
+              />
+            )}
+
+            <TouchableOpacity
+              style={[styles.primaryButton, { backgroundColor: colors.accent }]}
+              onPress={onSubmit}
+              disabled={busy}
+              activeOpacity={0.85}
+            >
+              {busy ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={[styles.primaryText, { fontSize: localFs(16) }]}>
+                  {mode === 'login' ? '로그인하기' : '회원가입하기'}
+                </Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.googleButton, { borderColor: colors.border }]}
+              onPress={onGoogleLogin}
+              disabled={busy}
+              activeOpacity={0.85}
+            >
+            <View style={styles.googleButtonContent}>
+              <Text style={[styles.googleWord, { fontSize: localFs(16) }]}>
+                <Text style={styles.googleBlue}>G</Text>
+                <Text style={styles.googleRed}>o</Text>
+                <Text style={styles.googleYellow}>o</Text>
+                <Text style={styles.googleBlue}>g</Text>
+                <Text style={styles.googleGreen}>l</Text>
+                <Text style={styles.googleRed}>e</Text>
+              </Text>
+              <Text style={[styles.googleButtonText, { fontSize: localFs(14) }]}>로 로그인</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+
+          <View
+            style={[
+              styles.curtainOverlay,
+              { top: cardLayout.y, height: cardLayout.height },
+            ]}
+          >
+            <View style={[styles.curtainTop, { height: 0 }]} />
+            <View style={[styles.curtainBody, { height: cardLayout.height }]}>
+              <Animated.View
+                style={[
+                  styles.curtainPanel,
+                  styles.curtainLeft,
+                  { transform: [{ translateX: leftTranslate }] },
+                ]}
+              >
+                <View style={styles.curtainStripes}>
+                  {[0, 1, 2, 3, 4].map((stripe) => (
+                    <View key={`stripe-left-${stripe}`} style={styles.curtainStripe} />
+                  ))}
+                </View>
+              </Animated.View>
+              <Animated.View
+                style={[
+                  styles.curtainPanel,
+                  styles.curtainRight,
+                  { transform: [{ translateX: rightTranslate }] },
+                ]}
+              >
+                <View style={styles.curtainStripes}>
+                  {[0, 1, 2, 3, 4].map((stripe) => (
+                    <View key={`stripe-right-${stripe}`} style={styles.curtainStripe} />
+                  ))}
+                </View>
+              </Animated.View>
+            </View>
+          </View>
+        </View>
+
+        <TouchableOpacity
+          style={styles.curtainStartButton}
+          onPress={() => setCurtainOpen((prev) => !prev)}
+          activeOpacity={0.9}
+        >
+          <Text style={styles.curtainButtonText}>시작하기</Text>
+        </TouchableOpacity>
+      </>
+    )
+  }
+
+  const MovieSection = ({
     title,
     data,
-    onLayout,
+    colors,
+    fontScale,
+    wishlist,
+    onToggleWishlist,
   }: {
     title: string
     data: Movie[]
-    onLayout?: (y: number) => void
-  }) => (
-    <View
-      style={styles.section}
-      onLayout={(e) => {
-        onLayout?.(e.nativeEvent.layout.y)
-      }}
-    >
-      <Text style={[styles.sectionTitle, { color: c.text, fontSize: fs(16) }]}>{title}</Text>
-      <FlatList
-        data={data}
-        keyExtractor={(item) => String(item.id)}
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        renderItem={({ item }) => {
+    colors: ThemeColors
+    fontScale: (size: number) => number
+    wishlist: WishlistItem[]
+    onToggleWishlist: (movie: Movie) => void
+  }) => {
+    const localFs = fontScale
+    return (
+      <View style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: colors.text, fontSize: localFs(16) }]}>{title}</Text>
+        <FlatList
+          data={data}
+          keyExtractor={(item) => String(item.id)}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          renderItem={({ item }: { item: Movie }) => {
+            const picked = wishlist.some((w) => w.id === item.id)
+            return (
+              <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <TouchableOpacity
+                  style={[
+                    styles.wishHeart,
+                    picked && styles.wishHeartActive,
+                    { borderColor: colors.border },
+                  ]}
+                  onPress={() => onToggleWishlist(item)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={{ color: '#fff', fontWeight: '800', fontSize: 18 }}>
+                    {picked ? '❤' : '❤'}
+                  </Text>
+                </TouchableOpacity>
+                <Image
+                  source={
+                    item.poster
+                      ? { uri: item.poster }
+                      : { uri: 'https://dummyimage.com/500x750/111827/ffffff&text=No+Image' }
+                  }
+                  style={styles.poster}
+                  resizeMode="cover"
+                />
+                <Text style={[styles.cardTitle, { color: colors.text, fontSize: localFs(14) }]} numberOfLines={1}>
+                  {item.title}
+                </Text>
+                <Text style={[styles.cardTag, { color: colors.muted, fontSize: localFs(12) }]} numberOfLines={2}>
+                  {item.overview || '줄거리가 없습니다.'}
+                </Text>
+              </View>
+            )
+          }}
+        />
+      </View>
+    )
+  }
+
+  const PopularList = ({
+    data,
+    wishlist,
+    colors,
+    fontScale,
+    loading,
+    hasMore,
+    page,
+    onLoadMore,
+    onToggleWishlist,
+  }: {
+    data: Movie[]
+    wishlist: WishlistItem[]
+    colors: ThemeColors
+    fontScale: (size: number) => number
+    loading: boolean
+    hasMore: boolean
+    page: number
+    onLoadMore: (page: number) => void
+    onToggleWishlist: (movie: Movie) => void
+  }) => {
+    const localFs = fontScale
+    return (
+      <View style={{ gap: 10 }}>
+        {data.map((item) => {
           const picked = wishlist.some((w) => w.id === item.id)
-          const recommended = recommendedList.some((w) => w.id === item.id)
           return (
-            <View style={[styles.card, { backgroundColor: c.card, borderColor: c.border }]}>
+            <View
+              key={item.id}
+              style={[styles.popularCard, { backgroundColor: colors.card, borderColor: colors.border, position: 'relative' }]}
+            >
+              <TouchableOpacity
+                style={[
+                  styles.wishHeart,
+                  picked && styles.wishHeartActive,
+                  { borderColor: colors.border, top: 10, right: 10 },
+                ]}
+                onPress={() => onToggleWishlist(item)}
+                activeOpacity={0.8}
+              >
+                <Text style={{ color: '#fff', fontWeight: '800', fontSize: 18 }}>
+                  {picked ? '❤' : '❤'}
+                </Text>
+              </TouchableOpacity>
               <Image
                 source={
                   item.poster
                     ? { uri: item.poster }
                     : { uri: 'https://dummyimage.com/500x750/111827/ffffff&text=No+Image' }
                 }
-                style={styles.poster}
+                style={styles.popularPoster}
                 resizeMode="cover"
               />
-              <Text style={[styles.cardTitle, { color: c.text, fontSize: fs(14) }]} numberOfLines={1}>
-                {item.title}
-              </Text>
-              <Text style={[styles.cardTag, { color: c.muted, fontSize: fs(12) }]} numberOfLines={2}>
-                {item.overview || '줄거리가 없습니다.'}
-              </Text>
-              <TouchableOpacity
-                style={[styles.wishButton, picked && styles.wishButtonActive, { borderColor: c.border }]}
-                onPress={() => toggleWishlistItem(item)}
-              >
-                <Text style={[styles.wishButtonText, { color: c.text, fontSize: fs(12) }]}>
-                  {picked ? '♥ 찜됨' : '♡ 찜하기'}
+              <View style={styles.popularBody}>
+                <Text style={[styles.cardTitle, { color: colors.text, fontSize: localFs(14) }]} numberOfLines={1}>
+                  {item.title}
                 </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.wishButton,
-                  recommended && styles.wishButtonActive,
-                  { borderColor: c.border, marginTop: 6 },
-                ]}
-                onPress={() => toggleRecommendedItem(item)}
-              >
-                <Text style={[styles.wishButtonText, { color: c.text, fontSize: fs(12) }]}>
-                  {recommended ? '★ 추천됨' : '☆ 추천'}
+                <Text style={[styles.cardTag, { color: colors.muted, fontSize: localFs(12) }]} numberOfLines={2}>
+                  {item.overview || '줄거리가 없습니다.'}
                 </Text>
-              </TouchableOpacity>
+              </View>
             </View>
           )
-        }}
-      />
-    </View>
-  )
-
-  const PopularList = () => (
-    <View style={{ gap: 10 }}>
-      {popular.map((item) => {
-        const picked = wishlist.some((w) => w.id === item.id)
-        return (
-          <View
-            key={item.id}
-            style={[styles.popularCard, { backgroundColor: c.card, borderColor: c.border }]}
+        })}
+        {hasMore && (
+          <TouchableOpacity
+            style={[styles.secondaryButton, { borderColor: colors.border, backgroundColor: colors.card, marginTop: 6 }]}
+            onPress={() => !loading && onLoadMore(page + 1)}
+            activeOpacity={0.85}
           >
-            <Image
-              source={
-                item.poster
-                  ? { uri: item.poster }
-                  : { uri: 'https://dummyimage.com/500x750/111827/ffffff&text=No+Image' }
-              }
-              style={styles.popularPoster}
-              resizeMode="cover"
+            {loading ? (
+              <ActivityIndicator color={colors.accent} />
+            ) : (
+              <Text style={[styles.secondaryText, { color: colors.text }]}>더보기</Text>
+            )}
+          </TouchableOpacity>
+        )}
+      </View>
+    )
+  }
+
+  const PopularScreen = ({
+    colors,
+    fontScale,
+    loading,
+    popular,
+    wishlist,
+    hasMore,
+    page,
+    onLoadMore,
+    onToggleWishlist,
+  }: {
+    colors: ThemeColors
+    fontScale: (size: number) => number
+    loading: boolean
+    popular: Movie[]
+    wishlist: WishlistItem[]
+    hasMore: boolean
+    page: number
+    onLoadMore: (page: number) => void
+    onToggleWishlist: (movie: Movie) => void
+  }) => {
+    const localFs = fontScale
+    return (
+      <View style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: colors.text, fontSize: localFs(18) }]}>지금 가장 인기 있는 영화</Text>
+        {loading ? (
+          <ActivityIndicator color="#e50914" />
+        ) : (
+          <PopularList
+            data={popular}
+            wishlist={wishlist}
+            colors={colors}
+            fontScale={localFs}
+            loading={loading}
+            hasMore={hasMore}
+            page={page}
+            onLoadMore={onLoadMore}
+            onToggleWishlist={onToggleWishlist}
+          />
+        )}
+      </View>
+    )
+  }
+
+  const HomeScreen = ({
+    colors,
+    fontScale,
+    searchQuery,
+    setSearchQuery,
+    onSearch,
+    loadingMovies,
+    popular,
+    nowPlaying,
+    wishlist,
+    onToggleWishlist,
+    setCurrentTab,
+  }: {
+    colors: ThemeColors
+    fontScale: (size: number) => number
+    searchQuery: string
+    setSearchQuery: (value: string) => void
+    onSearch: () => void
+    loadingMovies: boolean
+    popular: Movie[]
+    nowPlaying: Movie[]
+    wishlist: WishlistItem[]
+    onToggleWishlist: (movie: Movie) => void
+    setCurrentTab: (tab: TabKey) => void
+  }) => {
+    const localFs = fontScale
+    return (
+      <>
+        <View style={styles.hero}>
+          <Text style={[styles.heroEyebrow, { color: colors.muted }]}>FOR YOU</Text>
+          <Text style={[styles.heroTitle, { color: colors.text }]}>TMDB API로 랜덤 추천</Text>
+          <Text style={[styles.heroSubtitle, { color: colors.muted }]}>
+            트렌딩, 극장 상영, 평점 높은 작품을 여기에서 만나보세요.
+          </Text>
+          <View style={styles.searchRow}>
+            <TextInput
+              placeholder="검색어를 입력하세요"
+              placeholderTextColor="#9ca3af"
+              style={[
+                styles.searchInput,
+                { backgroundColor: colors.card, borderColor: colors.border, color: colors.text },
+              ]}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              onSubmitEditing={() => {
+                onSearch()
+                setCurrentTab('search')
+              }}
+              returnKeyType="search"
             />
-            <View style={styles.popularBody}>
-              <Text style={[styles.cardTitle, { color: c.text, fontSize: fs(14) }]} numberOfLines={1}>
-                {item.title}
-              </Text>
-              <Text style={[styles.cardTag, { color: c.muted, fontSize: fs(12) }]} numberOfLines={2}>
-                {item.overview || '줄거리가 없습니다.'}
-              </Text>
-              <TouchableOpacity
-                style={[styles.wishButton, picked && styles.wishButtonActive, { borderColor: c.border }]}
-                onPress={() => toggleWishlistItem(item)}
-              >
-                <Text style={[styles.wishButtonText, { color: c.text, fontSize: fs(12) }]}>
-                  {picked ? '♥ 찜됨' : '♡ 찜하기'}
-                </Text>
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity
+              style={[styles.secondaryButton, { borderColor: colors.border, backgroundColor: colors.card }]}
+              onPress={() => {
+                onSearch()
+                setCurrentTab('search')
+              }}
+              activeOpacity={0.85}
+            >
+              <Text style={[styles.secondaryText, { color: colors.text }]}>검색</Text>
+            </TouchableOpacity>
           </View>
-        )
-      })}
-      {hasMorePopular && (
-        <TouchableOpacity
-          style={[styles.secondaryButton, { borderColor: c.border, backgroundColor: c.card, marginTop: 6 }]}
-          onPress={() => !loadingPopular && loadPopular(popularPage + 1)}
-          activeOpacity={0.85}
-        >
-          {loadingPopular ? (
-            <ActivityIndicator color={c.accent} />
-          ) : (
-            <Text style={[styles.secondaryText, { color: c.text }]}>더 보기</Text>
-          )}
-        </TouchableOpacity>
-      )}
-    </View>
-  )
+        </View>
+        {loadingMovies && <ActivityIndicator color="#e50914" style={{ marginVertical: 10 }} />}
+        <MovieSection
+          title="지금 가장 인기 있는 영화"
+          data={popular}
+          colors={colors}
+          fontScale={localFs}
+          wishlist={wishlist}
+          onToggleWishlist={onToggleWishlist}
+        />
+        <MovieSection
+          title="극장에서 만나는 신작"
+          data={nowPlaying}
+          colors={colors}
+          fontScale={localFs}
+          wishlist={wishlist}
+          onToggleWishlist={onToggleWishlist}
+        />
+      </>
+    )
+  }
+
+  const SearchScreen = ({
+    colors,
+    fontScale,
+    loading,
+    searchQuery,
+    setSearchQuery,
+    onSearch,
+    results,
+    wishlist,
+    onToggleWishlist,
+  }: {
+    colors: ThemeColors
+    fontScale: (size: number) => number
+    loading: boolean
+    searchQuery: string
+    setSearchQuery: (value: string) => void
+    onSearch: () => void
+    results: Movie[]
+    wishlist: WishlistItem[]
+    onToggleWishlist: (movie: Movie) => void
+  }) => {
+    const localFs = fontScale
+    return (
+      <View style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: colors.text, fontSize: localFs(18) }]}>검색</Text>
+        <View style={styles.searchRow}>
+          <TextInput
+            placeholder="검색어를 입력하세요"
+            placeholderTextColor="#9ca3af"
+            style={[
+              styles.searchInput,
+              { backgroundColor: colors.card, borderColor: colors.border, color: colors.text },
+            ]}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            onSubmitEditing={onSearch}
+            returnKeyType="search"
+          />
+          <TouchableOpacity
+            style={[styles.secondaryButton, { borderColor: colors.border, backgroundColor: colors.card }]}
+            onPress={onSearch}
+            activeOpacity={0.85}
+          >
+            <Text style={[styles.secondaryText, { color: colors.text }]}>검색</Text>
+          </TouchableOpacity>
+        </View>
+        {loading && <ActivityIndicator color="#e50914" style={{ marginVertical: 10 }} />}
+        {!!results.length && (
+          <MovieSection
+            title="검색 결과"
+            data={results}
+            colors={colors}
+            fontScale={localFs}
+            wishlist={wishlist}
+            onToggleWishlist={onToggleWishlist}
+          />
+        )}
+      </View>
+    )
+  }
+
+  const WishlistScreen = ({
+    colors,
+    fontScale,
+    wishlist,
+    onToggleWishlist,
+  }: {
+    colors: ThemeColors
+    fontScale: (size: number) => number
+    wishlist: WishlistItem[]
+    onToggleWishlist: (movie: Movie) => void
+  }) => {
+    const localFs = fontScale
+    return (
+      <View style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: colors.text, fontSize: localFs(18) }]}>위시리스트</Text>
+        {wishlist.length ? (
+          <MovieSection
+            title=""
+            data={wishlist.map((w) => ({ id: w.id, title: w.title, overview: '', poster: w.poster }))}
+            colors={colors}
+            fontScale={localFs}
+            wishlist={wishlist}
+            onToggleWishlist={onToggleWishlist}
+          />
+        ) : (
+          <Text style={{ color: colors.muted }}>위시리스트가 비어 있습니다.</Text>
+        )}
+      </View>
+    )
+  }
 
   if (!user) {
     return (
       <SafeAreaView style={[styles.authContainer, { backgroundColor: c.bg }]}>
-        <StatusBar style="light" />
-        <Text style={[styles.logo, { color: c.accent }]}>PB neteflix</Text>
-        <View style={[styles.authCard, { backgroundColor: c.card, borderColor: c.border }]}>
-          <View style={styles.authTabs}>
-            <TouchableOpacity
-              style={[
-                styles.authTab,
-                { borderColor: c.border },
-                mode === 'login' && { backgroundColor: c.accent, borderColor: c.accent },
-              ]}
-              onPress={() => setMode('login')}
-            >
-              <Text style={[styles.authTabText, { fontSize: fs(14) }]}>LOGIN</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.authTab,
-                { borderColor: c.border },
-                mode === 'signup' && { backgroundColor: c.accent, borderColor: c.accent },
-              ]}
-              onPress={() => setMode('signup')}
-            >
-              <Text style={[styles.authTabText, { fontSize: fs(14) }]}>SIGN UP</Text>
-            </TouchableOpacity>
-          </View>
-
-          <Text style={[styles.authTitle, { fontSize: fs(20), color: c.text }]}>
-            {mode === 'login' ? '로그인' : 'Create account'}
-          </Text>
-          <TextInput
-            placeholder="이메일"
-            placeholderTextColor="#9ca3af"
-            autoCapitalize="none"
-            keyboardType="email-address"
-            style={[styles.input, { backgroundColor: c.card, borderColor: c.border, color: c.text }]}
-            value={email}
-            onChangeText={setEmail}
-          />
-          <TextInput
-            placeholder="비밀번호"
-            placeholderTextColor="#9ca3af"
-            secureTextEntry
-            style={[styles.input, { backgroundColor: c.card, borderColor: c.border, color: c.text }]}
-            value={password}
-            onChangeText={setPassword}
-          />
-          {mode === 'signup' && (
-            <TextInput
-              placeholder="비밀번호 확인"
-              placeholderTextColor="#9ca3af"
-              secureTextEntry
-              style={[styles.input, { backgroundColor: c.card, borderColor: c.border, color: c.text }]}
-              value={passwordConfirm}
-              onChangeText={setPasswordConfirm}
-            />
-          )}
-
-          <TouchableOpacity
-            style={[styles.primaryButton, { backgroundColor: c.accent }]}
-            onPress={handleAuth}
-            disabled={busy}
-            activeOpacity={0.85}
-          >
-            {busy ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={[styles.primaryText, { fontSize: fs(16) }]}>시작하기</Text>
-            )}
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.secondaryButton, styles.googleButton, { borderColor: c.border }]}
-            onPress={handleGoogleLogin}
-            disabled={busy || !primaryGoogleClientId}
-            activeOpacity={0.85}
-          >
-            {busy ? (
-              <ActivityIndicator color={c.text} />
-            ) : (
-              <Text style={[styles.secondaryText, styles.googleButtonText, { color: c.text }]}>
-                GOOGLE LOGIN
-              </Text>
-            )}
-          </TouchableOpacity>
-        </View>
+        <AuthScreen
+          mode={mode}
+          setMode={setMode}
+          email={email}
+          password={password}
+          passwordConfirm={passwordConfirm}
+          setEmail={setEmail}
+          setPassword={setPassword}
+          setPasswordConfirm={setPasswordConfirm}
+          busy={busy}
+          colors={c}
+          fontScale={fs}
+          onSubmit={handleAuth}
+          onGoogleLogin={handleGoogleLogin}
+        />
       </SafeAreaView>
     )
   }
@@ -593,7 +955,7 @@ function mergeUniqueMovies(base: Movie[], incoming: Movie[]) {
           </TouchableOpacity>
           <View style={styles.navActions}>
             <TouchableOpacity
-              style={styles.menuButton}
+              style={[styles.menuButton, { borderColor: c.border }]}
               onPress={() => setSettingsOpen((v) => !v)}
               activeOpacity={0.8}
             >
@@ -601,6 +963,7 @@ function mergeUniqueMovies(base: Movie[], incoming: Movie[]) {
             </TouchableOpacity>
           </View>
         </View>
+
         {navOpen && (
           <View style={[styles.navDropdown, { backgroundColor: c.card, borderColor: c.border }]}>
             {(Object.keys(tabLabel) as Array<keyof typeof tabLabel>).map((key) => (
@@ -624,460 +987,85 @@ function mergeUniqueMovies(base: Movie[], incoming: Movie[]) {
               style={styles.navRow}
               onPress={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
             >
-              <Text style={[styles.navLink, { color: c.text }]}>
-                테마: {theme === 'dark' ? '다크' : '라이트'}
-              </Text>
+              <Text style={[styles.navLink, { color: c.text }]}>Theme: {theme === 'dark' ? 'Dark' : 'Light'}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.navRow}
               onPress={() => setFontScale((s) => Math.min(1.2, s + 0.05))}
             >
-              <Text style={[styles.navLink, { color: c.text }]}>글자 크게</Text>
+              <Text style={[styles.navLink, { color: c.text }]}>Font bigger</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.navRow}
               onPress={() => setFontScale((s) => Math.max(0.9, s - 0.05))}
             >
-              <Text style={[styles.navLink, { color: c.text }]}>글자 작게</Text>
+              <Text style={[styles.navLink, { color: c.text }]}>Font smaller</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.navRow}
               onPress={() => setReduceMotion((v) => !v)}
             >
-              <Text style={[styles.navLink, { color: c.text }]}>
-                애니메이션: {reduceMotion ? '끄기' : '켜기'}
-              </Text>
+              <Text style={[styles.navLink, { color: c.text }]}>Animations: {reduceMotion ? 'Off' : 'On'}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.navRow} onPress={handleLogout} disabled={busy}>
-              <Text style={[styles.navLink, { color: c.text }]}>로그아웃</Text>
+              <Text style={[styles.navLink, { color: c.text }]}>Logout</Text>
             </TouchableOpacity>
           </View>
         )}
 
         {currentTab === 'home' && (
-          <>
-            <View style={styles.hero}>
-              <Text style={[styles.heroEyebrow, { color: c.muted }]}>FOR YOU</Text>
-              <Text style={[styles.heroTitle, { color: c.text }]}>TMDB API로 큐레이션된 추천</Text>
-              <Text style={[styles.heroSubtitle, { color: c.muted }]}>
-                인기, 상영 중, 추천 작품을 한 곳에서 만나보세요.
-              </Text>
-              <View style={styles.searchRow}>
-                <TextInput
-                  placeholder="검색어를 입력하세요"
-                  placeholderTextColor="#9ca3af"
-                  style={[
-                    styles.searchInput,
-                    { backgroundColor: c.card, borderColor: c.border, color: c.text },
-                  ]}
-                  value={searchQuery}
-                  onChangeText={setSearchQuery}
-                  onSubmitEditing={handleSearch}
-                  returnKeyType="search"
-                />
-                <TouchableOpacity
-                  style={[styles.secondaryButton, { borderColor: c.border, backgroundColor: c.card }]}
-                  onPress={() => {
-                    handleSearch()
-                    setCurrentTab('search')
-                  }}
-                  activeOpacity={0.85}
-                >
-                  <Text style={[styles.secondaryText, { color: c.text }]}>검색</Text>
-                </TouchableOpacity>
-              </View>
-              <View style={styles.heroButtons}>
-                <TouchableOpacity
-                  style={[styles.primaryButton, { backgroundColor: c.accent }]}
-                  onPress={handleAddNote}
-                  activeOpacity={0.85}
-                >
-                  <Text style={styles.primaryText}>Firestore에 메모 저장</Text>
-                </TouchableOpacity>
-                {!!notes.length && (
-                  <View style={[styles.noteBubble, { backgroundColor: c.card, borderColor: c.border }]}>
-                    <Text style={[styles.noteBubbleText, { color: c.text }]}>{notes[0]}</Text>
-                  </View>
-                )}
-              </View>
-            </View>
-            {loadingMovies && <ActivityIndicator color="#e50914" style={{ marginVertical: 10 }} />}
-            <Section title="지금 가장 뜨는 영화" data={popular} />
-            <Section title="극장에서 막 나온 작품" data={nowPlaying} />
-            <Section title="추천 큐레이션" data={recommend} />
-          </>
+          <HomeScreen
+            colors={c}
+            fontScale={fs}
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+            onSearch={handleSearch}
+            loadingMovies={loadingMovies}
+            popular={popular}
+            nowPlaying={nowPlaying}
+            wishlist={wishlist}
+            onToggleWishlist={toggleWishlistItem}
+            setCurrentTab={setCurrentTab}
+          />
         )}
 
         {currentTab === 'popular' && (
-          <>
-            <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: c.text, fontSize: fs(18) }]}>지금 가장 뜨는 영화</Text>
-              {loadingMovies ? <ActivityIndicator color="#e50914" /> : <PopularList />}
-            </View>
-          </>
+          <PopularScreen
+            colors={c}
+            fontScale={fs}
+            loading={loadingPopular}
+            popular={popular}
+            wishlist={wishlist}
+            hasMore={hasMorePopular}
+            page={popularPage}
+            onLoadMore={loadPopular}
+            onToggleWishlist={toggleWishlistItem}
+          />
         )}
 
         {currentTab === 'search' && (
-          <>
-            <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: c.text, fontSize: fs(18) }]}>검색</Text>
-              <View style={styles.searchRow}>
-                <TextInput
-                  placeholder="검색어를 입력하세요"
-                  placeholderTextColor="#9ca3af"
-                  style={[
-                    styles.searchInput,
-                    { backgroundColor: c.card, borderColor: c.border, color: c.text },
-                  ]}
-                  value={searchQuery}
-                  onChangeText={setSearchQuery}
-                  onSubmitEditing={handleSearch}
-                  returnKeyType="search"
-                />
-                <TouchableOpacity
-                  style={[styles.secondaryButton, { borderColor: c.border, backgroundColor: c.card }]}
-                  onPress={handleSearch}
-                  activeOpacity={0.85}
-                >
-                  <Text style={[styles.secondaryText, { color: c.text }]}>검색</Text>
-                </TouchableOpacity>
-              </View>
-              {loadingMovies && <ActivityIndicator color="#e50914" style={{ marginVertical: 10 }} />}
-              {!!searchResults.length && <Section title="검색 결과" data={searchResults} />}
-            </View>
-          </>
+          <SearchScreen
+            colors={c}
+            fontScale={fs}
+            loading={loadingMovies}
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+            onSearch={handleSearch}
+            results={searchResults}
+            wishlist={wishlist}
+            onToggleWishlist={toggleWishlistItem}
+          />
         )}
 
         {currentTab === 'wishlist' && (
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: c.text, fontSize: fs(18) }]}>내 위시리스트</Text>
-            {wishlist.length ? (
-              <Section
-                title=""
-                data={wishlist.map((w) => ({
-                  id: w.id,
-                  title: w.title,
-                  overview: '',
-                  poster: w.poster,
-                }))}
-              />
-            ) : (
-              <Text style={{ color: c.muted }}>위시리스트가 비어 있습니다.</Text>
-            )}
-          </View>
-        )}
-
-        {currentTab === 'recommended' && (
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: c.text, fontSize: fs(18) }]}>내 추천</Text>
-            {recommendedList.length ? (
-              <Section
-                title=""
-                data={recommendedList.map((w) => ({
-                  id: w.id,
-                  title: w.title,
-                  overview: '',
-                  poster: w.poster,
-                }))}
-              />
-            ) : (
-              <Text style={{ color: c.muted }}>추천 목록이 비어 있습니다.</Text>
-            )}
-          </View>
-        )}
-
-        {currentTab === 'recommended' && (
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: c.text, fontSize: fs(18) }]}>추천 큐레이션</Text>
-            {loadingMovies ? <ActivityIndicator color="#e50914" /> : <Section title="" data={recommend} />}
-          </View>
+          <WishlistScreen
+            colors={c}
+            fontScale={fs}
+            wishlist={wishlist}
+            onToggleWishlist={toggleWishlistItem}
+          />
         )}
       </ScrollView>
     </SafeAreaView>
   )
 }
-
-const palette = {
-  dark: {
-    bg: '#05070f',
-    card: '#0b1021',
-    border: '#1f2937',
-    text: '#f8fafc',
-    muted: '#9ca3af',
-    accent: '#e50914',
-  },
-  light: {
-    bg: '#f8fafc',
-    card: '#ffffff',
-    border: '#e5e7eb',
-    text: '#0f172a',
-    muted: '#475569',
-    accent: '#e50914',
-  },
-} as const
-
-const styles = StyleSheet.create({
-  authContainer: {
-    flex: 1,
-    backgroundColor: '#05070f',
-    paddingHorizontal: 20,
-    justifyContent: 'center',
-  },
-  logo: {
-    color: '#e50914',
-    fontWeight: '800',
-    fontSize: 22,
-  },
-  authCard: {
-    marginTop: 12,
-    backgroundColor: '#0b1021',
-    borderRadius: 16,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: '#111827',
-  },
-  authTabs: {
-    flexDirection: 'row',
-    marginBottom: 14,
-  },
-  authTab: {
-    flex: 1,
-    paddingVertical: 10,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#1f2937',
-  },
-  authTabActive: {
-    backgroundColor: '#e50914',
-    borderColor: '#e50914',
-  },
-  authTabText: {
-    color: '#fff',
-    fontWeight: '700',
-    letterSpacing: 1,
-  },
-  authTitle: {
-    color: '#fff',
-    fontSize: 20,
-    fontWeight: '700',
-    marginBottom: 12,
-  },
-  input: {
-    backgroundColor: '#0f172a',
-    color: '#fff',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: '#1f2937',
-  },
-  primaryButton: {
-    backgroundColor: '#e50914',
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginTop: 6,
-  },
-  primaryText: {
-    color: '#fff',
-    fontWeight: '700',
-  },
-  homeContainer: {
-    flex: 1,
-    backgroundColor: '#05070f',
-  },
-  navBar: {
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  navLinks: {
-    flexDirection: 'row',
-    gap: 12,
-    alignItems: 'center',
-  },
-  navLink: {
-    color: '#e5e7eb',
-    fontSize: 12,
-    letterSpacing: 1,
-  },
-  navActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  logoutPill: {
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: '#1f2937',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: '#0b1021',
-  },
-  logoutPillText: {
-    color: '#cbd5e1',
-    fontWeight: '600',
-  },
-  menuButton: {
-    borderRadius: 8,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginLeft: 12,
-  },
-  navDropdown: {
-    marginHorizontal: 20,
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 10,
-    marginBottom: 6,
-  },
-  navRow: {
-    paddingVertical: 6,
-  },
-  hero: {
-    paddingHorizontal: 20,
-    paddingVertical: 18,
-    gap: 6,
-  },
-  heroEyebrow: {
-    color: '#9ca3af',
-    letterSpacing: 2,
-    fontSize: 11,
-  },
-  heroTitle: {
-    color: '#fff',
-    fontSize: 22,
-    fontWeight: '800',
-  },
-  heroSubtitle: {
-    color: '#cbd5e1',
-    fontSize: 13,
-  },
-  searchRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 12,
-  },
-  searchInput: {
-    flex: 1,
-    backgroundColor: '#0f172a',
-    color: '#fff',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: '#1f2937',
-  },
-  secondaryButton: {
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#1f2937',
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    backgroundColor: '#0b1021',
-  },
-  secondaryText: {
-    color: '#e5e7eb',
-    fontWeight: '700',
-  },
-  googleButton: {
-    marginTop: 10,
-    backgroundColor: '#111827',
-    borderColor: '#1f2937',
-  },
-  googleButtonText: {
-    fontWeight: '800',
-    letterSpacing: 1,
-  },
-  heroButtons: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 10,
-    flexWrap: 'wrap',
-  },
-  noteBubble: {
-    marginTop: 10,
-    backgroundColor: '#0f172a',
-    padding: 10,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#1f2937',
-  },
-  noteBubbleText: {
-    color: '#e5e7eb',
-  },
-  section: {
-    paddingHorizontal: 20,
-    marginTop: 10,
-    marginBottom: 4,
-  },
-  sectionTitle: {
-    color: '#e5e7eb',
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 8,
-  },
-  card: {
-    backgroundColor: '#0b1021',
-    borderRadius: 12,
-    padding: 10,
-    marginRight: 12,
-    width: 160,
-    borderWidth: 1,
-    borderColor: '#1f2937',
-  },
-  poster: {
-    height: 190,
-    borderRadius: 8,
-    backgroundColor: '#111827',
-    marginBottom: 10,
-  },
-  cardTitle: {
-    color: '#fff',
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  cardTag: {
-    color: '#9ca3af',
-    fontSize: 12,
-    marginBottom: 10,
-  },
-  wishButton: {
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#1f2937',
-    paddingVertical: 8,
-    alignItems: 'center',
-    backgroundColor: '#0f172a',
-  },
-  wishButtonActive: {
-    borderColor: '#e50914',
-    backgroundColor: 'rgba(229,9,20,0.12)',
-  },
-  wishButtonText: {
-    color: '#e5e7eb',
-    fontWeight: '700',
-    fontSize: 12,
-  },
-  popularCard: {
-    flexDirection: 'row',
-    gap: 10,
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 10,
-    marginBottom: 10,
-  },
-  popularPoster: {
-    width: 100,
-    height: 150,
-    borderRadius: 8,
-    backgroundColor: '#111827',
-  },
-  popularBody: {
-    flex: 1,
-  },
-})

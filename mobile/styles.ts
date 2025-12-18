@@ -75,6 +75,27 @@ export const styles = StyleSheet.create({
   googleButtonText: {
     fontWeight: '700',
   },
+  googleButtonContent: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  googleWord: {
+    fontWeight: '800',
+  },
+  googleBlue: {
+    color: '#4285F4',
+  },
+  googleRed: {
+    color: '#EA4335',
+  },
+  googleYellow: {
+    color: '#FBBC04',
+  },
+  googleGreen: {
+    color: '#34A853',
+  },
   primaryText: {
     color: '#fff',
     fontWeight: '700',
@@ -318,6 +339,67 @@ export const styles = StyleSheet.create({
   modalButtonPrimary: {
     backgroundColor: '#e50914',
     borderColor: '#e50914',
+  },
+  curtainWrapper: {
+    width: '100%',
+    paddingHorizontal: 20,
+    marginTop: 12,
+  },
+  curtainOverlay: {
+    position: 'absolute',
+    inset: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    pointerEvents: 'none',
+  },
+  curtainTop: {
+    width: '100%',
+    height: 0,
+    backgroundColor: 'transparent',
+  },
+  curtainBody: {
+    flexDirection: 'row',
+    width: '100%',
+    overflow: 'hidden',
+  },
+  curtainPanel: {
+    flex: 1,
+    height: '100%',
+    backgroundColor: '#e50914',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  curtainLeft: {
+    borderRightWidth: 1,
+    borderColor: '#b91c1c',
+  },
+  curtainRight: {
+    borderLeftWidth: 1,
+    borderColor: '#b91c1c',
+  },
+  curtainStripes: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  curtainStripe: {
+    width: 6,
+    height: 160,
+    backgroundColor: '#c53030',
+    borderRadius: 4,
+  },
+  curtainStartButton: {
+    alignSelf: 'center',
+    marginTop: 16,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#1f2937',
+    backgroundColor: '#0b1021',
+  },
+  curtainButtonText: {
+    color: '#e5e7eb',
+    fontWeight: '700',
   },
   popularCard: {
     flexDirection: 'row',
