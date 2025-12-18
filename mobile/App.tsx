@@ -22,6 +22,7 @@ import { styles } from './styles'
 import {
   fetchNowPlaying,
   fetchPopular,
+  fetchTopRated,
   searchMovies,
   posterUrl,
   type TmdbMovie,
@@ -41,6 +42,7 @@ export default function App() {
   const [popularPage, setPopularPage] = useState(1)
   const [hasMorePopular, setHasMorePopular] = useState(true)
   const [nowPlaying, setNowPlaying] = useState<Movie[]>([])
+  const [topRated, setTopRated] = useState<Movie[]>([])
   const [wishlist, setWishlist] = useState<WishlistItem[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<Movie[]>([])
@@ -111,8 +113,10 @@ export default function App() {
     setLoadingMovies(true)
     try {
       const now = await fetchNowPlaying()
+      const top = await fetchTopRated()
       await loadPopular(1)
       setNowPlaying(mapMovies(now.slice(0, 10)))
+      setTopRated(mapMovies(top.slice(0, 10)))
     } catch (err) {
       console.error(err)
       Alert.alert('TMDB 오류', '영화 정보를 불러오지 못했어요.')
@@ -479,17 +483,18 @@ export default function App() {
               <HomeScreen
                 colors={c}
                 fontScale={fs}
-            searchQuery={searchQuery}
-            setSearchQuery={setSearchQuery}
-            onSearch={handleSearch}
-            loadingMovies={loadingMovies}
-            popular={popular}
-            nowPlaying={nowPlaying}
-            wishlist={wishlist}
-            onToggleWishlist={toggleWishlistItem}
-            setCurrentTab={setCurrentTab}
-          />
-        )}
+                searchQuery={searchQuery}
+                setSearchQuery={setSearchQuery}
+                onSearch={handleSearch}
+                loadingMovies={loadingMovies}
+                popular={popular}
+                nowPlaying={nowPlaying}
+                topRated={topRated}
+                wishlist={wishlist}
+                onToggleWishlist={toggleWishlistItem}
+                setCurrentTab={setCurrentTab}
+              />
+            )}
 
             {currentTab === 'popular' && (
               <PopularScreen

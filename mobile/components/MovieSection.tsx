@@ -70,7 +70,7 @@ export function MovieSection({ title, data, colors, fontScale, wishlist, onToggl
             )
           }}
         />
-        <View style={styles.sliderArrows}>
+        <View style={styles.sliderArrows} pointerEvents="box-none">
           <Pressable
             style={({ pressed }) => [
               styles.sliderArrow,

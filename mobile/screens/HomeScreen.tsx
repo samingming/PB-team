@@ -14,6 +14,7 @@ interface Props {
   loadingMovies: boolean
   popular: Movie[]
   nowPlaying: Movie[]
+  topRated: Movie[]
   wishlist: WishlistItem[]
   onToggleWishlist: (movie: Movie) => void
   setCurrentTab: (tab: TabKey) => void
@@ -28,6 +29,7 @@ export function HomeScreen({
   loadingMovies,
   popular,
   nowPlaying,
+  topRated,
   wishlist,
   onToggleWishlist,
   setCurrentTab,
@@ -76,9 +78,19 @@ export function HomeScreen({
         wishlist={wishlist}
         onToggleWishlist={onToggleWishlist}
       />
+      <View style={{ height: 14 }} />
       <MovieSection
         title="극장에서 만나는 신작"
         data={nowPlaying}
+        colors={colors}
+        fontScale={fs}
+        wishlist={wishlist}
+        onToggleWishlist={onToggleWishlist}
+      />
+      <View style={{ height: 14 }} />
+      <MovieSection
+        title="평점 높은 영화"
+        data={topRated}
         colors={colors}
         fontScale={fs}
         wishlist={wishlist}
