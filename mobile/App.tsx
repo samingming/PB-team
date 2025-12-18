@@ -478,7 +478,11 @@ export default function App() {
             </View>
           )}
 
-          <ScrollView showsVerticalScrollIndicator={false}>
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{ paddingBottom: 32 }}
+          >
             {currentTab === 'home' && (
               <HomeScreen
                 colors={c}
