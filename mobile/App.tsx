@@ -416,15 +416,22 @@ export default function App() {
             <TouchableWithoutFeedback onPress={() => setConfirmMovie(null)}>
               <View style={styles.modalOverlay}>
                 <TouchableWithoutFeedback>
-                  <View style={styles.modalCard}>
-                    <Text style={styles.modalTitle}>삭제 확인</Text>
-                    <Text style={styles.modalText}>위시리스트에서 삭제하시겠습니까?</Text>
+                  <View style={[styles.modalCard, { backgroundColor: c.card, borderColor: c.border }]}>
+                    <Text style={[styles.modalTitle, { color: c.text }]}>삭제 확인</Text>
+                    <Text style={[styles.modalText, { color: c.muted }]}>위시리스트에서 삭제하시겠습니까?</Text>
                     <View style={styles.modalButtons}>
-                      <TouchableOpacity style={styles.modalButton} onPress={() => setConfirmMovie(null)}>
-                        <Text style={{ color: '#e5e7eb', fontWeight: '700' }}>취소</Text>
+                      <TouchableOpacity
+                        style={[styles.modalButton, { backgroundColor: c.card, borderColor: c.border }]}
+                        onPress={() => setConfirmMovie(null)}
+                      >
+                        <Text style={{ color: c.text, fontWeight: '700' }}>취소</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
-                        style={[styles.modalButton, styles.modalButtonPrimary]}
+                        style={[
+                          styles.modalButton,
+                          styles.modalButtonPrimary,
+                          { backgroundColor: c.accent, borderColor: c.accent },
+                        ]}
                         onPress={async () => {
                           if (!confirmMovie || !user) return
                           const docRef = doc(db, 'wishlists', user.uid)

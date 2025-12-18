@@ -33,6 +33,7 @@ export function PopularList({
     <View style={{ gap: 10 }}>
       {data.map((item) => {
         const picked = wishlist.some((w) => w.id === item.id)
+        const heartTextColor = picked ? '#fff' : colors.text
         return (
           <View
             key={item.id}
@@ -42,13 +43,13 @@ export function PopularList({
               style={[
                 styles.wishHeart,
                 picked && styles.wishHeartActive,
-                { borderColor: colors.border, top: 10, right: 10 },
+                { borderColor: colors.border, top: 10, right: 10, backgroundColor: picked ? colors.accent : colors.card },
               ]}
               onPress={() => onToggleWishlist(item)}
               activeOpacity={0.8}
             >
-              <Text style={{ color: '#fff', fontWeight: '800', fontSize: 18 }}>
-                {picked ? '❤' : '❤'}
+              <Text style={{ color: heartTextColor, fontWeight: '800', fontSize: 18 }}>
+                {picked ? '\u2665' : '\u2661'}
               </Text>
             </TouchableOpacity>
             <Image
@@ -65,7 +66,7 @@ export function PopularList({
                 {item.title}
               </Text>
               <Text style={[styles.cardTag, { color: colors.muted, fontSize: fs(12) }]} numberOfLines={2}>
-                {item.overview || '줄거리가 없습니다.'}
+                {item.overview || '??? ????.'}
               </Text>
             </View>
           </View>
@@ -77,7 +78,7 @@ export function PopularList({
           onPress={() => !loading && onLoadMore(page + 1)}
           activeOpacity={0.85}
         >
-          {loading ? <ActivityIndicator color={colors.accent} /> : <Text style={[styles.secondaryText, { color: colors.text }]}>더보기</Text>}
+          {loading ? <ActivityIndicator color={colors.accent} /> : <Text style={[styles.secondaryText, { color: colors.text }]}>???</Text>}
         </TouchableOpacity>
       )}
     </View>
