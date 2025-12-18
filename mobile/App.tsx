@@ -266,20 +266,20 @@ export default function App() {
       >
         <View style={{ flex: 1 }}>
           <View style={[styles.navBar, { backgroundColor: c.bg }]}>
-            <Text style={[styles.logo, { color: c.accent }]}>PB neteflix</Text>
-            <TouchableOpacity
-              style={[styles.menuButton, { borderColor: c.border }]}
-              onPress={() => {
-                setNavOpen((v) => !v)
-                setSettingsOpen(false)
-              }}
-              activeOpacity={0.8}
-            >
-              <Text style={{ color: c.text, fontWeight: '700' }}>MENU</Text>
-            </TouchableOpacity>
-            <View style={styles.navActions}>
+            <Text style={[styles.logo, { color: c.accent }]}>BPTP</Text>
+            <View style={[styles.navActions, { gap: 10 }]}>
               <TouchableOpacity
-                style={styles.menuButton}
+                style={[styles.menuButton, { borderColor: c.border }]}
+                onPress={() => {
+                  setNavOpen((v) => !v)
+                  setSettingsOpen(false)
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={{ color: c.text, fontWeight: '700' }}>MENU</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.menuButton, { borderColor: c.border }]}
                 onPress={() => {
                   setSettingsOpen((v) => !v)
                   setNavOpen(false)
@@ -298,8 +298,9 @@ export default function App() {
                 {
                   backgroundColor: theme === 'dark' ? '#1e2740' : 'rgba(255,255,255,0.96)',
                   borderColor: theme === 'dark' ? '#394766' : '#d1d5db',
-                  left: '35%',
-                  right: '35%',
+                  right: 98.5,
+                  left: undefined,
+                  width: '30%',
                 },
               ]}
             >
