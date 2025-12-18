@@ -936,14 +936,14 @@ const c: ThemeColors = theme === 'dark' ? palette.dark : palette.light
               <View style={styles.modalOverlay}>
                 <TouchableWithoutFeedback>
                   <View style={[styles.modalCard, { backgroundColor: c.card, borderColor: c.border }]}>
-                    <Text style={[styles.modalTitle, { color: c.text }]}>Remove from wishlist</Text>
-                    <Text style={[styles.modalText, { color: c.muted }]}>Remove this movie from your wishlist?</Text>
+                    <Text style={[styles.modalTitle, { color: c.text }]}>위시리스트 삭제</Text>
+                    <Text style={[styles.modalText, { color: c.muted }]}>이 영화를 위시리스트에서 삭제할까요?</Text>
                     <View style={styles.modalButtons}>
                       <TouchableOpacity
                         style={[styles.modalButton, { backgroundColor: c.card, borderColor: c.border }]}
                         onPress={() => setConfirmMovie(null)}
                       >
-                        <Text style={{ color: c.text, fontWeight: '700' }}>Cancel</Text>
+                        <Text style={{ color: c.text, fontWeight: '700' }}>취소</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
                         style={[
@@ -960,7 +960,7 @@ const c: ThemeColors = theme === 'dark' ? palette.dark : palette.light
                           setConfirmMovie(null)
                         }}
                       >
-                        <Text style={{ color: '#fff', fontWeight: '700' }}>Delete</Text>
+                        <Text style={{ color: '#fff', fontWeight: '700' }}>삭제</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
