@@ -55,6 +55,8 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [currentTab, setCurrentTab] = useState<TabKey>('home')
   const [confirmMovie, setConfirmMovie] = useState<Movie | null>(null)
+  const [showPopularTop, setShowPopularTop] = useState(false)
+  const scrollRef = useRef<ScrollView>(null)
   const popularLoadSeq = useRef(0)
   const closePanels = () => {
     setNavOpen(false)
@@ -252,6 +254,7 @@ const c: ThemeColors = theme === 'dark' ? palette.dark : palette.light
         setHasMorePopular(true)
         setLoadingPopular(false)
       }
+      if (showPopularTop) setShowPopularTop(false)
       return
     }
 
@@ -499,6 +502,7 @@ const c: ThemeColors = theme === 'dark' ? palette.dark : palette.light
           )}
 
           <ScrollView
+            ref={scrollRef}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={{ paddingBottom: 32, flexGrow: 1 }}
@@ -512,6 +516,11 @@ const c: ThemeColors = theme === 'dark' ? palette.dark : palette.light
                 if (distanceFromBottom < 200) {
                   loadPopular(popularPage + 1)
                 }
+              }
+              if (currentTab === 'popular') {
+                setShowPopularTop(nativeEvent.contentOffset.y > 400)
+              } else if (showPopularTop) {
+                setShowPopularTop(false)
               }
             }}
           >
@@ -569,6 +578,31 @@ const c: ThemeColors = theme === 'dark' ? palette.dark : palette.light
               />
             )}
           </ScrollView>
+
+          {currentTab === 'popular' && showPopularTop && (
+            <TouchableOpacity
+              style={{
+                position: 'absolute',
+                right: 16,
+                bottom: 20,
+                width: 48,
+                height: 48,
+                borderRadius: 24,
+                backgroundColor: c.accent,
+                alignItems: 'center',
+                justifyContent: 'center',
+                shadowColor: '#000',
+                shadowOpacity: 0.3,
+                shadowRadius: 8,
+                shadowOffset: { width: 0, height: 4 },
+                elevation: 6,
+              }}
+              activeOpacity={0.85}
+              onPress={() => scrollRef.current?.scrollTo({ y: 0, animated: true })}
+            >
+              <Text style={{ color: '#fff', fontWeight: '800', fontSize: 22 }}>{'\u2191'}</Text>
+            </TouchableOpacity>
+          )}
 
           <Modal
             visible={!!confirmMovie}
