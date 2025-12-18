@@ -10,7 +10,7 @@
       ></span>
     </div>
 
-    <div class="auth-stage">
+    <div class="auth-stage" :class="{ open: curtainOpen }">
       <div class="auth-stage__controls">
         <button
           type="button"
@@ -539,22 +539,23 @@ function changeMode(next: 'login' | 'register') {
     repeating-linear-gradient(
       to right,
       rgba(0, 0, 0, 0.16) 0%,
-      rgba(0, 0, 0, 0.06) 4%,
-      rgba(0, 0, 0, 0.16) 8%
+      rgba(0, 0, 0, 0.06) 3.5%,
+      rgba(0, 0, 0, 0.16) 7%
     ),
     repeating-linear-gradient(
       to bottom,
       rgba(0, 0, 0, 0.18) 0%,
-      rgba(0, 0, 0, 0.08) 18%,
-      rgba(0, 0, 0, 0.18) 36%
+      rgba(0, 0, 0, 0.08) 16%,
+      rgba(0, 0, 0, 0.18) 32%
     ),
     linear-gradient(135deg, rgba(229, 9, 20, 1), rgba(124, 6, 12, 1));
   border: 1px solid rgba(255, 255, 255, 0.08);
-  transition: transform 0.6s cubic-bezier(0.19, 1, 0.22, 1);
+  transition: transform 0.7s cubic-bezier(0.19, 1, 0.22, 1);
   box-shadow:
     inset 0 0 50px rgba(0, 0, 0, 0.35),
     0 18px 45px rgba(0, 0, 0, 0.6);
   opacity: 1;
+  transform-origin: center top;
 }
 
 .curtain__panel::before {
@@ -575,8 +576,8 @@ function changeMode(next: 'login' | 'register') {
   background: repeating-linear-gradient(
     to right,
     rgba(0, 0, 0, 0.24) 0%,
-    rgba(0, 0, 0, 0.08) 6%,
-    rgba(0, 0, 0, 0.24) 12%
+    rgba(0, 0, 0, 0.08) 5.5%,
+    rgba(0, 0, 0, 0.24) 11%
   );
   opacity: 0.25;
   mix-blend-mode: multiply;
@@ -601,11 +602,11 @@ function changeMode(next: 'login' | 'register') {
 }
 
 .curtain--open .curtain__panel--left {
-  transform: translateX(-105%);
+  transform: translateX(-115%) scaleX(0.94);
 }
 
 .curtain--open .curtain__panel--right {
-  transform: translateX(105%);
+  transform: translateX(115%) scaleX(0.94);
 }
 
 .curtain--open .curtain__glow {
