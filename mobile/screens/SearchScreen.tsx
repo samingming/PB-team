@@ -1,5 +1,15 @@
 import { useState } from 'react'
-import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native'
+import {
+  ActivityIndicator,
+  FlatList,
+  Image,
+  Pressable,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  useWindowDimensions,
+} from 'react-native'
 
 import { MovieSection } from '../components/MovieSection'
 import type { ThemeColors } from '../theme'
@@ -23,6 +33,10 @@ interface Props {
   setSearchYear: (value: SearchYearRange) => void
   onResetFilters: () => void
   results: Movie[]
+  page: number
+  hasMore: boolean
+  onLoadMore: (page: number) => void
+  searchActive: boolean
   wishlist: WishlistItem[]
   onToggleWishlist: (movie: Movie) => void
 }
@@ -44,12 +58,18 @@ export function SearchScreen({
   setSearchYear,
   onResetFilters,
   results,
+  page,
+  hasMore,
+  onLoadMore,
+  searchActive,
   wishlist,
   onToggleWishlist,
 }: Props) {
   const fs = fontScale
   const hasResults = results.length > 0
   const [openFilter, setOpenFilter] = useState<'genre' | 'language' | 'year' | null>(null)
+  const { width: windowWidth } = useWindowDimensions()
+  const cardWidth = Math.max(100, (windowWidth - 40 - 16 - 16) / 3) // section padding 40 + column padding 16 + gaps ~16
   const sortOptions: Array<{ key: SearchSort; label: string }> = [
     { key: 'popular', label: '인기순' },
     { key: 'latest', label: '최신순' },
@@ -153,7 +173,7 @@ export function SearchScreen({
   }
 
   return (
-    <View style={styles.section}>
+    <View style={[styles.section, { flex: 1 }]}>
       <Text style={[styles.sectionTitle, { color: colors.text, fontSize: fs(18) }]}>검색</Text>
       <View style={styles.searchRow}>
         <TextInput
@@ -234,16 +254,81 @@ export function SearchScreen({
         </Pressable>
       </View>
       {loading && <ActivityIndicator color="#e50914" style={{ marginVertical: 10 }} />}
-      {hasResults && (
-        <MovieSection
-          title="검색 결과"
-          data={results}
-          colors={colors}
-          fontScale={fs}
-          wishlist={wishlist}
-          onToggleWishlist={onToggleWishlist}
+      <View style={{ flex: 1, marginTop: 12 }}>
+        <Text style={[styles.sectionTitle, { color: colors.text, fontSize: fs(16) }]}>검색 결과</Text>
+        <FlatList
+          data={searchActive ? results : []}
+          style={{ flex: 1 }}
+          keyExtractor={(item) => String(item.id)}
+          numColumns={3}
+          columnWrapperStyle={{ gap: 8, paddingHorizontal: 8, justifyContent: 'flex-start' }}
+          contentContainerStyle={{ gap: 12, paddingBottom: 16, flexGrow: 1 }}
+          renderItem={({ item }) => {
+            const picked = wishlist.some((w) => w.id === item.id)
+            const heartTextColor = picked ? '#fff' : colors.text
+            return (
+              <View
+                style={[
+                  styles.card,
+                  {
+                    width: cardWidth,
+                    marginRight: 0,
+                    backgroundColor: colors.card,
+                    borderColor: colors.border,
+                  },
+                ]}
+              >
+                <TouchableOpacity
+                  style={[
+                    styles.wishHeart,
+                    picked && styles.wishHeartActive,
+                    { borderColor: colors.border, backgroundColor: picked ? colors.accent : colors.card },
+                  ]}
+                  onPress={() => onToggleWishlist(item)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={{ color: heartTextColor, fontWeight: '800', fontSize: 18 }}>
+                    {picked ? '\u2665' : '\u2661'}
+                  </Text>
+                </TouchableOpacity>
+                <Image
+                  source={
+                    item.poster
+                      ? { uri: item.poster }
+                      : { uri: 'https://dummyimage.com/500x750/111827/ffffff&text=No+Image' }
+                  }
+                  style={[styles.poster, { width: cardWidth - 20 }]} // account for card padding
+                  resizeMode="cover"
+                />
+                <Text style={[styles.cardTitle, { color: colors.text, fontSize: fs(14) }]} numberOfLines={1}>
+                  {item.title}
+                </Text>
+                <Text style={[styles.cardTag, { color: colors.muted, fontSize: fs(12) }]} numberOfLines={2}>
+                  {item.overview || '정보가 부족합니다.'}
+                </Text>
+              </View>
+            )
+          }}
+          onEndReachedThreshold={0.4}
+          onEndReached={() => searchActive && hasMore && onLoadMore(page + 1)}
+          ListFooterComponent={
+            loading ? (
+              <View style={{ paddingVertical: 12 }}>
+                <ActivityIndicator color={colors.accent} />
+              </View>
+            ) : null
+          }
+          ListEmptyComponent={
+            !loading ? (
+              <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 20 }}>
+                <Text style={{ color: colors.muted, fontSize: fs(14), marginBottom: 10 }}>
+                  결과가 없습니다. 검색어를 입력하거나 정렬/필터를 선택하세요.
+                </Text>
+              </View>
+            ) : null
+          }
         />
-      )}
+      </View>
     </View>
   )
 }

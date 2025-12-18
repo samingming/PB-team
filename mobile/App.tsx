@@ -61,6 +61,9 @@ export default function App() {
   const [searchGenre, setSearchGenre] = useState<SearchGenre>('all')
   const [searchLanguage, setSearchLanguage] = useState<SearchLanguage>('all')
   const [searchYear, setSearchYear] = useState<SearchYearRange>('all')
+  const [searchPage, setSearchPage] = useState(1)
+  const [hasMoreSearch, setHasMoreSearch] = useState(true)
+  const [searchActive, setSearchActive] = useState(false)
   const [loadingMovies, setLoadingMovies] = useState(false)
   const [loadingPopular, setLoadingPopular] = useState(false)
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
@@ -363,15 +366,80 @@ async function toggleWishlistItem(movie: Movie) {
     })
   }
 
-  async function handleSearch() {
+  async function loadMoreSearch(page: number) {
+    if (loadingMovies || !hasMoreSearch || !searchActive) return
     try {
       setLoadingMovies(true)
       const trimmed = searchQuery.trim()
+      let incoming: Movie[] = []
+      if (trimmed) {
+        const res = await searchMovies(trimmed, page)
+        incoming = mapMovies(res)
+      } else {
+        const genreIdMap: Partial<Record<SearchGenre, number>> = {
+          액션: 28,
+          어드벤처: 12,
+          애니메이션: 16,
+          코미디: 35,
+          범죄: 80,
+          드라마: 18,
+          판타지: 14,
+          공포: 27,
+          로맨스: 10749,
+          SF: 878,
+          스릴러: 53,
+        }
+        const sortMap: Record<SearchSort, string> = {
+          popular: 'popularity.desc',
+          latest: 'primary_release_date.desc',
+          rating: 'vote_average.desc',
+          title: 'original_title.asc',
+        }
+        const sortKey = searchSort ?? 'popular'
+        const [gte, lte] =
+          searchYear === '2020+'
+            ? ['2020-01-01', undefined]
+            : searchYear === '2010s'
+              ? ['2010-01-01', '2019-12-31']
+              : searchYear === '2000s'
+                ? ['2000-01-01', '2009-12-31']
+                : searchYear === '1990s'
+                  ? ['1990-01-01', '1999-12-31']
+                  : searchYear === 'pre1990'
+                    ? [undefined, '1989-12-31']
+                    : [undefined, undefined]
+        const baseParams = {
+          sortBy: sortMap[sortKey],
+          withOriginalLanguage: searchLanguage !== 'all' ? searchLanguage : undefined,
+          withGenres: searchGenre !== 'all' ? String(genreIdMap[searchGenre] ?? '') : undefined,
+          primaryReleaseDateGte: gte,
+          primaryReleaseDateLte: lte,
+        }
+        const res = await discoverMovies({ ...baseParams, page })
+        incoming = mapMovies(res)
+      }
+      setSearchResults((prev) => mergeUniqueMovies(prev, incoming))
+      setSearchPage(page)
+      setHasMoreSearch(incoming.length > 0)
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setLoadingMovies(false)
+    }
+  }
+
+  async function handleSearch() {
+    try {
+      setLoadingMovies(true)
+      setSearchPage(1)
+      setHasMoreSearch(true)
+      setSearchActive(true)
+      const trimmed = searchQuery.trim()
       if (trimmed) {
         const page1 = await searchMovies(trimmed, 1)
-        const page2 = await searchMovies(trimmed, 2)
-        const combined = [...page1, ...page2]
-        setSearchResults(mergeUniqueMovies([], mapMovies(combined)))
+        const mapped = mapMovies(page1)
+        setSearchResults(mergeUniqueMovies([], mapped))
+        setHasMoreSearch(mapped.length > 0)
       } else {
         const genreIdMap: Partial<Record<SearchGenre, number>> = {
           액션: 28,
@@ -413,11 +481,10 @@ async function toggleWishlistItem(movie: Movie) {
           primaryReleaseDateGte: gte,
           primaryReleaseDateLte: lte,
         }
-        const [page1, page2] = await Promise.all([
-          discoverMovies({ ...baseParams, page: 1 }),
-          discoverMovies({ ...baseParams, page: 2 }),
-        ])
-        setSearchResults(mergeUniqueMovies([], mapMovies([...page1, ...page2])))
+        const page1 = await discoverMovies({ ...baseParams, page: 1 })
+        const mapped = mapMovies(page1)
+        setSearchResults(mergeUniqueMovies([], mapped))
+        setHasMoreSearch(mapped.length > 0)
       }
       setCurrentTab('search')
     } catch (err) {
@@ -435,6 +502,9 @@ async function toggleWishlistItem(movie: Movie) {
     setSearchYear('all')
     setSearchQuery('')
     setSearchResults([])
+    setSearchPage(1)
+    setHasMoreSearch(false)
+    setSearchActive(false)
   }
 
   const filteredSearchResults = useMemo(
@@ -729,61 +799,8 @@ const c: ThemeColors = theme === 'dark' ? palette.dark : palette.light
             </View>
           )}
 
-          <ScrollView
-            ref={scrollRef}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-            contentContainerStyle={{ paddingBottom: 32, flexGrow: 1 }}
-            nestedScrollEnabled
-            overScrollMode="always"
-            scrollEventThrottle={16}
-            onScroll={({ nativeEvent }) => {
-              if (currentTab === 'popular' && hasMorePopular && !loadingPopular) {
-                const { contentOffset, contentSize, layoutMeasurement } = nativeEvent
-                const distanceFromBottom = contentSize.height - (contentOffset.y + layoutMeasurement.height)
-                if (distanceFromBottom < 200) {
-                  loadPopular(popularPage + 1)
-                }
-              }
-              if (currentTab === 'popular') {
-                setShowPopularTop(nativeEvent.contentOffset.y > 400)
-              } else if (showPopularTop) {
-                setShowPopularTop(false)
-              }
-            }}
-          >
-            {currentTab === 'home' && (
-              <HomeScreen
-                colors={c}
-                fontScale={fs}
-                searchQuery={searchQuery}
-                setSearchQuery={setSearchQuery}
-                onSearch={handleSearch}
-                loadingMovies={loadingMovies}
-                popular={popular}
-                nowPlaying={nowPlaying}
-                topRated={topRated}
-                wishlist={wishlist}
-                onToggleWishlist={toggleWishlistItem}
-                setCurrentTab={setCurrentTab}
-              />
-            )}
-
-            {currentTab === 'popular' && (
-              <PopularScreen
-                colors={c}
-                fontScale={fs}
-                loading={loadingPopular}
-                popular={popular}
-                wishlist={wishlist}
-                hasMore={hasMorePopular}
-                page={popularPage}
-                onLoadMore={(nextPage) => !loadingPopular && loadPopular(nextPage)}
-                onToggleWishlist={toggleWishlistItem}
-              />
-            )}
-
-            {currentTab === 'search' && (
+          {currentTab === 'search' ? (
+            <View style={{ flex: 1 }}>
               <SearchScreen
                 colors={c}
                 fontScale={fs}
@@ -801,20 +818,79 @@ const c: ThemeColors = theme === 'dark' ? palette.dark : palette.light
                 setSearchYear={setSearchYear}
                 onResetFilters={resetSearchFilters}
                 results={sortedSearchResults}
+                page={searchPage}
+                hasMore={hasMoreSearch}
+                onLoadMore={(next) => loadMoreSearch(next)}
+                searchActive={searchActive}
                 wishlist={wishlist}
                 onToggleWishlist={toggleWishlistItem}
               />
-            )}
+            </View>
+          ) : (
+            <ScrollView
+              ref={scrollRef}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={{ paddingBottom: 32, flexGrow: 1 }}
+              nestedScrollEnabled
+              overScrollMode="always"
+              scrollEventThrottle={16}
+              onScroll={({ nativeEvent }) => {
+                if (currentTab === 'popular' && hasMorePopular && !loadingPopular) {
+                  const { contentOffset, contentSize, layoutMeasurement } = nativeEvent
+                  const distanceFromBottom = contentSize.height - (contentOffset.y + layoutMeasurement.height)
+                  if (distanceFromBottom < 200) {
+                    loadPopular(popularPage + 1)
+                  }
+                }
+                if (currentTab === 'popular') {
+                  setShowPopularTop(nativeEvent.contentOffset.y > 400)
+                } else if (showPopularTop) {
+                  setShowPopularTop(false)
+                }
+              }}
+            >
+              {currentTab === 'home' && (
+                <HomeScreen
+                  colors={c}
+                  fontScale={fs}
+                  searchQuery={searchQuery}
+                  setSearchQuery={setSearchQuery}
+                  onSearch={handleSearch}
+                  loadingMovies={loadingMovies}
+                  popular={popular}
+                  nowPlaying={nowPlaying}
+                  topRated={topRated}
+                  wishlist={wishlist}
+                  onToggleWishlist={toggleWishlistItem}
+                  setCurrentTab={setCurrentTab}
+                />
+              )}
 
-            {currentTab === 'wishlist' && (
-              <WishlistScreen
-                colors={c}
-                fontScale={fs}
-                wishlist={wishlist}
-                onToggleWishlist={toggleWishlistItem}
-              />
-            )}
-          </ScrollView>
+              {currentTab === 'popular' && (
+                <PopularScreen
+                  colors={c}
+                  fontScale={fs}
+                  loading={loadingPopular}
+                  popular={popular}
+                  wishlist={wishlist}
+                  hasMore={hasMorePopular}
+                  page={popularPage}
+                  onLoadMore={(nextPage) => !loadingPopular && loadPopular(nextPage)}
+                  onToggleWishlist={toggleWishlistItem}
+                />
+              )}
+
+              {currentTab === 'wishlist' && (
+                <WishlistScreen
+                  colors={c}
+                  fontScale={fs}
+                  wishlist={wishlist}
+                  onToggleWishlist={toggleWishlistItem}
+                />
+              )}
+            </ScrollView>
+          )}
 
           {currentTab === 'popular' && showPopularTop && (
             <TouchableOpacity
