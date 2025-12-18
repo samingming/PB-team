@@ -182,7 +182,7 @@ export function SearchScreen({
           style={[styles.searchInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
           value={searchQuery}
           onChangeText={setSearchQuery}
-          onSubmitEditing={onSearch}
+          onSubmitEditing={() => onSearch()}
           returnKeyType="search"
         />
         <Pressable
