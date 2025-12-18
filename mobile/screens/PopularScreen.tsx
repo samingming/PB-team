@@ -29,6 +29,7 @@ export function PopularScreen({
   onToggleWishlist,
 }: Props) {
   const fs = fontScale
+  const initialLoading = loading && popular.length === 0
 
   return (
     <View style={styles.section}>

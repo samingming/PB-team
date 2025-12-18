@@ -486,6 +486,15 @@ export default function App() {
             overScrollMode="always"
             scrollEventThrottle={16}
             onStartShouldSetResponderCapture={() => true}
+            onScroll={({ nativeEvent }) => {
+              if (currentTab === 'popular' && hasMorePopular && !loadingPopular) {
+                const { contentOffset, contentSize, layoutMeasurement } = nativeEvent
+                const distanceFromBottom = contentSize.height - (contentOffset.y + layoutMeasurement.height)
+                if (distanceFromBottom < 200) {
+                  loadPopular(popularPage + 1)
+                }
+              }
+            }}
           >
             {currentTab === 'home' && (
               <HomeScreen

@@ -73,13 +73,14 @@ export function PopularList({
         )
       })}
       {hasMore && (
-        <TouchableOpacity
-          style={[styles.secondaryButton, { borderColor: colors.border, backgroundColor: colors.card, marginTop: 6 }]}
-          onPress={() => !loading && onLoadMore(page + 1)}
-          activeOpacity={0.85}
-        >
-          {loading ? <ActivityIndicator color={colors.accent} /> : <Text style={[styles.secondaryText, { color: colors.text }]}>???</Text>}
-        </TouchableOpacity>
+        <View style={{ alignItems: 'center', paddingVertical: 14 }}>
+          {loading && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <ActivityIndicator color={colors.accent} />
+              <Text style={{ color: colors.accent, fontWeight: '700' }}>다음 페이지 로딩 중...</Text>
+            </View>
+          )}
+        </View>
       )}
     </View>
   )
