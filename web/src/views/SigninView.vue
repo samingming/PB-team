@@ -93,7 +93,7 @@
               <button type="submit" class="cta-button" :disabled="isSubmitting">
                 로그인
               </button>
-            </form>
+</form>
 
             <button
               type="button"
@@ -177,7 +177,7 @@
 
     <div class="curtain-toggle-row">
       <button type="button" class="curtain-toggle" @click="openCurtain">
-        시작하기
+        입장하기
       </button>
     </div>
   </div>
@@ -525,7 +525,8 @@ function changeMode(next: 'login' | 'register') {
   content: '';
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.16);
+  background: linear-gradient(135deg, rgba(255, 140, 150, 0.28), transparent);
+  opacity: 0.45;
   pointer-events: none;
   z-index: 1;
 }
@@ -548,7 +549,7 @@ function changeMode(next: 'login' | 'register') {
       rgba(0, 0, 0, 0.08) 16%,
       rgba(0, 0, 0, 0.18) 32%
     ),
-    linear-gradient(135deg, rgba(229, 9, 20, 1), rgba(124, 6, 12, 1));
+    linear-gradient(128deg, #ff6971, #ff0028 45%, #a30011);
   border: 1px solid rgba(255, 255, 255, 0.08);
   transition: transform 0.7s cubic-bezier(0.19, 1, 0.22, 1);
   box-shadow:
@@ -575,12 +576,12 @@ function changeMode(next: 'login' | 'register') {
   inset: 0;
   background: repeating-linear-gradient(
     to right,
-    rgba(0, 0, 0, 0.24) 0%,
-    rgba(0, 0, 0, 0.08) 5.5%,
-    rgba(0, 0, 0, 0.24) 11%
+    rgba(0, 0, 0, 0.16) 0%,
+    rgba(255, 255, 255, 0.18) 4.5%,
+    rgba(0, 0, 0, 0.16) 9%
   );
-  opacity: 0.25;
-  mix-blend-mode: multiply;
+  opacity: 0.28;
+  mix-blend-mode: screen;
   pointer-events: none;
 }
 
@@ -594,10 +595,10 @@ function changeMode(next: 'login' | 'register') {
 
 .curtain__glow {
   position: absolute;
-  inset: 8% 4%;
-  background: radial-gradient(circle, rgba(229, 9, 20, 0.5), transparent 70%);
-  filter: blur(32px);
-  opacity: 0;
+  inset: 5% 1%;
+  background: radial-gradient(circle, rgba(255, 80, 90, 0.78), transparent 70%);
+  filter: blur(22px);
+  opacity: 0.55;
   transition: opacity 0.6s ease;
 }
 
@@ -610,7 +611,7 @@ function changeMode(next: 'login' | 'register') {
 }
 
 .curtain--open .curtain__glow {
-  opacity: 0;
+  opacity: 0.15;
 }
 
 .curtain-launch {
@@ -882,6 +883,19 @@ function changeMode(next: 'login' | 'register') {
 .auth-message--inline {
   margin-top: 0.75rem;
   text-align: left;
+}
+.callback-hint {
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+  color: rgba(248, 250, 252, 0.7);
+  word-break: break-all;
+}
+.callback-hint code {
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  background: rgba(15, 23, 42, 0.6);
+  padding: 0.15rem 0.35rem;
+  border-radius: 6px;
+  color: #f8fafc;
 }
 
 @media (prefers-reduced-motion: reduce) {

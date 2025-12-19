@@ -9,6 +9,7 @@ export const TMDB_ENDPOINTS = {
   search: '/search/movie',
   genres: '/genre/movie/list',
   detail: (id: number) => `/movie/${id}`,
+  videos: (id: number) => `/movie/${id}/videos`,
 } as const
 
 export const TMDB_IMAGE_SIZES = {
