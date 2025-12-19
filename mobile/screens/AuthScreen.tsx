@@ -176,25 +176,39 @@ export const AuthScreen = forwardRef<AuthScreenHandle, Props>(function AuthScree
                 style={[
                   styles.authTab,
                   { borderColor: colors.border },
-                  mode === 'login' && { backgroundColor: colors.accent, borderColor: colors.accent },
-                ]}
-                onPress={() => switchMode('login')}
-                activeOpacity={0.85}
-              >
-                <Text style={[styles.authTabText, { fontSize: fs(14) }]}>LOGIN</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.authTab,
-                  { borderColor: colors.border },
-                  mode === 'signup' && { backgroundColor: colors.accent, borderColor: colors.accent },
-                ]}
-                onPress={() => switchMode('signup')}
-                activeOpacity={0.85}
-              >
-                <Text style={[styles.authTabText, { fontSize: fs(14) }]}>SIGN UP</Text>
-              </TouchableOpacity>
-            </View>
+              mode === 'login' && { backgroundColor: colors.accent, borderColor: colors.accent },
+            ]}
+            onPress={() => switchMode('login')}
+            activeOpacity={0.85}
+          >
+            <Text
+              style={[
+                styles.authTabText,
+                { fontSize: fs(14), color: mode === 'login' ? '#fff' : colors.text },
+              ]}
+            >
+              LOGIN
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.authTab,
+              { borderColor: colors.border },
+              mode === 'signup' && { backgroundColor: colors.accent, borderColor: colors.accent },
+            ]}
+            onPress={() => switchMode('signup')}
+            activeOpacity={0.85}
+          >
+            <Text
+              style={[
+                styles.authTabText,
+                { fontSize: fs(14), color: mode === 'signup' ? '#fff' : colors.text },
+              ]}
+            >
+              SIGN UP
+            </Text>
+          </TouchableOpacity>
+        </View>
 
             <Text style={[styles.authTitle, { fontSize: fs(20), color: colors.text }]}>
               {mode === 'login' ? '로그인' : '회원가입'}

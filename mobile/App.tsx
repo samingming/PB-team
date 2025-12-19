@@ -2,6 +2,7 @@ import { StatusBar } from 'expo-status-bar'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, Modal, Pressable, ScrollView, Text, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import {
   createUserWithEmailAndPassword,
   onAuthStateChanged,
@@ -314,20 +315,35 @@ async function fetchWishlist(uid: string) {
     }
   }
 
-async function handleLogout() {
+  async function clearAuthCache() {
+    try {
+      const apiKey = auth.app.options.apiKey
+      const appName = auth.app.name
+      const userKey = `firebase:authUser:${apiKey}:${appName}`
+      const eventKey = `firebase:authEvent:${apiKey}:${appName}`
+      await AsyncStorage.multiRemove([userKey, eventKey])
+    } catch (err) {
+      console.error('auth cache clear failed', err)
+    }
+  }
+
+  async function handleLogout() {
     setBusy(true)
     try {
       await signOut(auth)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Please try again.'
+      console.error('logout failed', err)
+      Alert.alert('Logout failed', message)
+      await clearAuthCache()
+    } finally {
+      // UI를 로그인 상태로 돌려 사용자가 바로 재로그인할 수 있게 함
       setUser(null)
       setWishlist([])
       setMode('login')
       setCurrentTab('home')
       setNavOpen(false)
       setSettingsOpen(false)
-    } catch (err) {
-      console.error('logout failed', err)
-      Alert.alert('Logout failed', 'Please try again.')
-    } finally {
       setBusy(false)
     }
   }
@@ -818,7 +834,7 @@ const c: ThemeColors = theme === 'dark' ? palette.dark : palette.light
                   </TouchableOpacity>
                 </View>
               </View>
-              <TouchableOpacity style={styles.navRow} onPress={handleLogout} disabled={busy}>
+              <TouchableOpacity style={styles.navRow} onPress={handleLogout} activeOpacity={0.85}>
                 <Text style={[styles.navLink, { color: c.text }]}>로그아웃</Text>
               </TouchableOpacity>
             </View>

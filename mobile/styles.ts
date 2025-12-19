@@ -17,14 +17,14 @@ export const styles = StyleSheet.create({
     gap: 12,
   },
   curtainStage: {
-    height: 320,
+    height: 420, // taller to fit extra social button
     borderRadius: 16,
     overflow: 'hidden',
     backgroundColor: '#060910',
     position: 'relative',
   },
   curtainStageTall: {
-    height: 440,
+    height: 520,
   },
   curtainPanel: {
     position: 'absolute',
