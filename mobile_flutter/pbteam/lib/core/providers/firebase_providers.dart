@@ -3,8 +3,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../firebase_options.dart';
-
 /// Ensures Firebase is initialized once and exposes core services.
 final firebaseAppProvider = Provider<FirebaseApp>((ref) {
   // Already initialized in main(), but keeping for completeness if needed elsewhere.

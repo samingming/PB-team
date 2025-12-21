@@ -11,17 +11,22 @@ class WishlistAddButton extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final repo = ref.read(wishlistRepositoryProvider);
+    final messenger = ScaffoldMessenger.of(context);
     return IconButton(
       icon: const Icon(Icons.favorite_border),
-      onPressed: () {
+      onPressed: () async {
         final poster = movie.posterUrl(size: 'w342');
-        ref
-            .read(wishlistRepositoryProvider)
-            .add(movie.id, movie.title, poster)
-            .then((_) => ScaffoldMessenger.of(context)
-                .showSnackBar(const SnackBar(content: Text('Added to wishlist'))))
-            .catchError((e) => ScaffoldMessenger.of(context)
-                .showSnackBar(SnackBar(content: Text('Failed: $e'))));
+        try {
+          await repo.add(movie.id, movie.title, poster);
+          messenger.showSnackBar(
+            const SnackBar(content: Text('Added to wishlist')),
+          );
+        } catch (e) {
+          messenger.showSnackBar(
+            SnackBar(content: Text('Failed: $e')),
+          );
+        }
       },
     );
   }

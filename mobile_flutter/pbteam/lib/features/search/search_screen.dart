@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../movies/models/search_filters.dart';
-import '../movies/providers/search_controller.dart';
+import '../movies/providers/search_controller.dart' as search;
 import '../movies/widgets/movie_list.dart';
 import '../wishlist/widgets/wishlist_add_button.dart';
 import 'package:go_router/go_router.dart';
@@ -12,8 +12,8 @@ class SearchScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(searchControllerProvider);
-    final controller = ref.read(searchControllerProvider.notifier);
+    final state = ref.watch(search.searchControllerProvider);
+    final controller = ref.read(search.searchControllerProvider.notifier);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Search')),
@@ -69,8 +69,8 @@ class SearchScreen extends ConsumerWidget {
 class _Filters extends StatelessWidget {
   const _Filters({required this.state, required this.onChange});
 
-  final SearchState state;
-  final SearchController onChange;
+  final search.SearchState state;
+  final search.SearchController onChange;
 
   @override
   Widget build(BuildContext context) {

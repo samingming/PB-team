@@ -22,3 +22,15 @@ subprojects {
 tasks.register<Delete>("clean") {
     delete(rootProject.layout.buildDirectory)
 }
+
+// Temporary fix for uni_links (pre-namespace) on AGP 8+: set namespace to avoid build failure.
+// Remove this once the dependency is upgraded to a version that declares its own namespace.
+subprojects {
+    if (name == "uni_links") {
+        pluginManager.withPlugin("com.android.library") {
+            extensions.configure<com.android.build.gradle.LibraryExtension>("android") {
+                namespace = "uni_links"
+            }
+        }
+    }
+}

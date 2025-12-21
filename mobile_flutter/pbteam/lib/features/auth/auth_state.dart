@@ -10,11 +10,15 @@ enum AuthStatus { unknown, signedOut, signedIn }
 
 class AuthStateNotifier extends Notifier<AuthStatus> {
   late final FirebaseAuth _auth;
+  late final GoogleSignIn _googleSignIn;
+  late final Future<void> _googleInit;
   StreamSubscription<User?>? _sub;
 
   @override
   AuthStatus build() {
     _auth = ref.read(firebaseAuthProvider);
+    _googleSignIn = GoogleSignIn.instance;
+    _googleInit = _googleSignIn.initialize();
     _sub = _auth.authStateChanges().listen((user) {
       state = user == null ? AuthStatus.signedOut : AuthStatus.signedIn;
     });
@@ -24,16 +28,22 @@ class AuthStateNotifier extends Notifier<AuthStatus> {
     return AuthStatus.unknown;
   }
 
-  Future<void> signOut() => _auth.signOut();
+  Future<void> signOut() async {
+    await _googleInit;
+    await _googleSignIn.signOut();
+    await _auth.signOut();
+  }
 
   Future<UserCredential> signInWithGoogle() async {
-    final googleUser = await GoogleSignIn().signIn();
-    if (googleUser == null) {
-      throw Exception('Google sign-in was cancelled');
+    await _googleInit;
+    final googleUser = await _googleSignIn.authenticate(
+      scopeHint: const <String>['email', 'profile'],
+    );
+    final googleAuth = googleUser.authentication;
+    if (googleAuth.idToken == null) {
+      throw StateError('Google ID token was missing');
     }
-    final googleAuth = await googleUser.authentication;
     final credential = GoogleAuthProvider.credential(
-      accessToken: googleAuth.accessToken,
       idToken: googleAuth.idToken,
     );
     return _auth.signInWithCredential(credential);

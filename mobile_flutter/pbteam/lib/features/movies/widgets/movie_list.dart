@@ -18,7 +18,7 @@ class MovieList extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListView.separated(
       itemCount: movies.length,
-      separatorBuilder: (_, __) => const Divider(height: 1),
+      separatorBuilder: (context, _) => const Divider(height: 1),
       itemBuilder: (context, index) {
         final m = movies[index];
         return ListTile(
