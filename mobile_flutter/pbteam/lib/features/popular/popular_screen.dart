@@ -390,7 +390,7 @@ class _Poster extends StatelessWidget {
             ? Image.network(
                 poster,
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => _placeholder(),
+                errorBuilder: (context, error, stackTrace) => _placeholder(),
               )
             : _placeholder(),
       ),

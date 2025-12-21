@@ -45,10 +45,10 @@ class TmdbMovie {
           country = (entry['name'] as String?) ??
               (entry['iso_3166_1'] as String?)?.toUpperCase();
         }
-        if (country != null && country!.isNotEmpty) break;
+        if (country != null && country.isNotEmpty) break;
       }
     }
-    if (country == null || country!.isEmpty) {
+    if (country == null || country.isEmpty) {
       final origin = json['origin_country'] as List<dynamic>?;
       if (origin != null && origin.isNotEmpty) {
         final first = origin.firstWhere(

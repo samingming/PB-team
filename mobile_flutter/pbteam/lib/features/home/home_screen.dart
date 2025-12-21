@@ -320,7 +320,7 @@ class _HomeSectionState extends State<_HomeSection> {
                     scrollDirection: Axis.horizontal,
                     itemCount: items.length,
                     padding: const EdgeInsets.only(right: 12),
-                    separatorBuilder: (_, __) => const SizedBox(width: 12),
+                    separatorBuilder: (context, _) => const SizedBox(width: 12),
                     itemBuilder: (context, index) {
                       final m = items[index];
                       final picked = widget.wishlistMap.containsKey(m.id);
@@ -341,10 +341,10 @@ class _HomeSectionState extends State<_HomeSection> {
                             begin: Alignment.centerLeft,
                             end: Alignment.centerRight,
                             colors: [
-                              palette.bg.withOpacity(0.7),
-                              palette.bg.withOpacity(0.0),
-                              palette.bg.withOpacity(0.0),
-                              palette.bg.withOpacity(0.7),
+                              palette.bg.withAlpha((0.7 * 255).round()),
+                              palette.bg.withAlpha((0.0 * 255).round()),
+                              palette.bg.withAlpha((0.0 * 255).round()),
+                              palette.bg.withAlpha((0.7 * 255).round()),
                             ],
                             stops: const [0, 0.05, 0.95, 1],
                           ),
@@ -413,7 +413,7 @@ class _ArrowButton extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4),
       child: Material(
-        color: palette.card.withOpacity(0.9),
+        color: palette.card.withAlpha((0.9 * 255).round()),
         shape: const CircleBorder(),
         elevation: 6,
         child: InkWell(

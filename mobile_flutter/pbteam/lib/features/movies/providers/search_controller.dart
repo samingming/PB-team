@@ -20,7 +20,7 @@ class SearchState {
   });
 
   final String query;
-  final SearchSort sort;
+  final SearchSort? sort;
   final SearchGenre genre;
   final SearchLanguage language;
   final SearchYearRange year;
@@ -61,7 +61,7 @@ class SearchState {
 
   static SearchState initial() => const SearchState(
         query: '',
-        sort: SearchSort.popular,
+        sort: null,
         genre: SearchGenre.all,
         language: SearchLanguage.all,
         year: SearchYearRange.all,
@@ -104,7 +104,7 @@ class SearchController extends Notifier<SearchState> {
 
   Future<void> search({SearchSort? overrideSort}) async {
     if (state.loading) return;
-    final sort = overrideSort ?? state.sort;
+    final sort = overrideSort ?? state.sort ?? SearchSort.popular;
     state = state.copyWith(
       loading: true,
       page: 1,
@@ -129,9 +129,10 @@ class SearchController extends Notifier<SearchState> {
   Future<void> loadMore() async {
     if (state.loading || !state.hasMore || !state.active) return;
     final nextPage = state.page + 1;
+    final sort = state.sort ?? SearchSort.popular;
     state = state.copyWith(loading: true, error: null);
     try {
-      final results = await _fetchPage(sort: state.sort, page: nextPage);
+      final results = await _fetchPage(sort: sort, page: nextPage);
       state = state.copyWith(
         results: [...state.results, ...results],
         page: nextPage,
