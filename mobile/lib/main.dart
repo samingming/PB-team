@@ -88,7 +88,7 @@ class _AppRootState extends State<AppRoot> {
         : const PageTransitionsTheme();
 
     return MaterialApp(
-      title: 'PB neteflix',
+      title: 'YEEMIN',
       themeMode: _themeMode,
       theme: ThemeData(
         brightness: Brightness.light,
@@ -283,17 +283,29 @@ class _AuthScreenState extends State<AuthScreen> {
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 420),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  'PB neteflix',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: const Color(0xFFE50914),
-                      ),
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Image.asset(
+                      'assets/logo-yeemin.png',
+                      width: 48,
+                      height: 48,
+                      fit: BoxFit.contain,
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      'YEEMIN',
+                      style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+                            fontWeight: FontWeight.w900,
+                            color: const Color(0xFFE50914),
+                            letterSpacing: 0.12,
+                          ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 24),
                 SegmentedButton<bool>(
@@ -1002,7 +1014,25 @@ class _MainScreenState extends State<MainScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('PB neteflix'),
+        title: Row(
+          children: [
+            Image.asset(
+              'assets/logo-yeemin.png',
+              width: 28,
+              height: 28,
+              fit: BoxFit.contain,
+            ),
+            const SizedBox(width: 8),
+            const Text(
+              'YEEMIN',
+              style: TextStyle(
+                fontWeight: FontWeight.w900,
+                letterSpacing: 0.12,
+                color: Color(0xFFE50914),
+              ),
+            ),
+          ],
+        ),
         actions: [
           PopupMenuButton<_MenuAction>(
             onSelected: (action) {

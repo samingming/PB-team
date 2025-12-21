@@ -1,13 +1,9 @@
 <template>
   <header class="head-bar" :class="{ 'head-bar--scrolled': isScrolled }">
     <div class="head-bar__inner page-shell">
-      <button class="head-bar__brand" type="button" @click="goHome">
-        <FontAwesomeIcon
-          :icon="['fab', 'vuejs']"
-          class="head-bar__brand-icon"
-          aria-hidden="true"
-        />
-        PB<span>neteflix</span>
+      <button class="head-bar__brand" type="button" @click="goHome" aria-label="YEEMIN 홈으로 이동">
+        <img src="/logo-yeemin.png" alt="YEEMIN" class="head-bar__brand-logo" />
+        <span class="head-bar__brand-text head-bar__brand-text--red">YEEMIN</span>
       </button>
 
       <button
@@ -249,8 +245,8 @@ async function handleLogout() {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  font-size: 1.45rem;
-  font-weight: 700;
+  font-size: 1.25rem;
+  font-weight: 800;
   color: var(--color-accent);
   background: transparent;
   border: none;
@@ -258,18 +254,27 @@ async function handleLogout() {
   letter-spacing: 0.06em;
 }
 
-.head-bar__brand span {
+.head-bar__brand-logo {
+  width: 32px;
+  height: auto;
+}
+
+.head-bar__brand-text {
   color: #fff;
-  font-size: 0.9rem;
+  font-family: 'Montserrat', 'Poppins', 'Arial Black', 'Helvetica Neue', sans-serif;
+  font-size: 1.12rem;
   letter-spacing: 0.1em;
+  font-weight: 900;
+  text-transform: uppercase;
 }
 
-[data-theme='light'] .head-bar__brand span {
+.head-bar__brand-text--red {
+  color: #e50914;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+[data-theme='light'] .head-bar__brand-text {
   color: #0f172a;
-}
-
-.head-bar__brand-icon {
-  font-size: 1.2rem;
 }
 
 .head-bar__menu {
