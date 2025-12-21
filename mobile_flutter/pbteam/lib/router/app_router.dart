@@ -95,7 +95,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         return '/auth';
       }
 
-      if (authStatus == AuthStatus.signedIn && loggingIn) {
+      if (authStatus == AuthStatus.signedIn && (loggingIn || onSplash)) {
         return '/home';
       }
 

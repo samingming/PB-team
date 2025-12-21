@@ -36,19 +36,40 @@ class AuthStateNotifier extends Notifier<AuthStatus> {
 
   Future<UserCredential> signInWithGoogle() async {
     await _googleInit;
-    final googleUser = await _googleSignIn.authenticate(
-      scopeHint: const <String>['email', 'profile'],
-    );
+    GoogleSignInAccount googleUser;
+    try {
+      googleUser = await _googleSignIn.authenticate();
+    } on GoogleSignInException catch (e) {
+      if (e.code == GoogleSignInExceptionCode.canceled) {
+        throw StateError('Google sign-in was cancelled');
+      }
+      rethrow;
+    }
     final googleAuth = googleUser.authentication;
     if (googleAuth.idToken == null) {
-      throw StateError('Google ID token was missing');
+      throw StateError(
+        'Google sign-in did not return an ID token. '
+        'Check the Google client configuration in firebase/google-services.json.',
+      );
     }
     final credential = GoogleAuthProvider.credential(
       idToken: googleAuth.idToken,
     );
     return _auth.signInWithCredential(credential);
   }
+
+  Future<UserCredential> signInWithEmail(String email, String password) {
+    return _auth.signInWithEmailAndPassword(email: email, password: password);
+  }
+
+  Future<UserCredential> signUpWithEmail(String email, String password) {
+    return _auth.createUserWithEmailAndPassword(
+      email: email,
+      password: password,
+    );
+  }
 }
 
-final authStateProvider =
-    NotifierProvider<AuthStateNotifier, AuthStatus>(AuthStateNotifier.new);
+final authStateProvider = NotifierProvider<AuthStateNotifier, AuthStatus>(
+  AuthStateNotifier.new,
+);
