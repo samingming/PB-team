@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../movies/models/search_filters.dart';
 import '../movies/providers/search_controller.dart' as search;
 import '../movies/widgets/movie_list.dart';
+import '../root/widgets/yeemin_app_bar.dart';
 import '../wishlist/widgets/wishlist_add_button.dart';
-import 'package:go_router/go_router.dart';
 
 class SearchScreen extends ConsumerWidget {
   const SearchScreen({super.key});
@@ -16,7 +17,7 @@ class SearchScreen extends ConsumerWidget {
     final controller = ref.read(search.searchControllerProvider.notifier);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Search')),
+      appBar: const YeeminAppBar(),
       body: Column(
         children: [
           Padding(

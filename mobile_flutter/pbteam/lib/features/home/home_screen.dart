@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../movies/providers/now_playing_provider.dart';
 import '../movies/providers/top_rated_provider.dart';
 import '../movies/widgets/movie_list.dart';
+import '../root/widgets/yeemin_app_bar.dart';
 import '../wishlist/widgets/wishlist_add_button.dart';
-import 'package:go_router/go_router.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -16,7 +17,7 @@ class HomeScreen extends ConsumerWidget {
     final topRated = ref.watch(topRatedProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Home')),
+      appBar: const YeeminAppBar(),
       body: ListView(
         children: [
           const Padding(

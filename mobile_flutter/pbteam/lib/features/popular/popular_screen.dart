@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../movies/providers/popular_provider.dart';
 import '../movies/widgets/movie_list.dart';
+import '../root/widgets/yeemin_app_bar.dart';
 import '../wishlist/widgets/wishlist_add_button.dart';
-import 'package:go_router/go_router.dart';
 
 class PopularScreen extends ConsumerWidget {
   const PopularScreen({super.key});
@@ -13,7 +14,7 @@ class PopularScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final popularAsync = ref.watch(popularMoviesProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Popular')),
+      appBar: const YeeminAppBar(),
       body: popularAsync.when(
         data: (movies) => MovieList(
           movies: movies,

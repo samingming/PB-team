@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../root/widgets/yeemin_app_bar.dart';
 import 'data/wishlist_repository.dart';
 import 'providers/wishlist_provider.dart';
 
@@ -11,7 +12,7 @@ class WishlistScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final wishlist = ref.watch(wishlistStreamProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Wishlist')),
+      appBar: const YeeminAppBar(),
       body: wishlist.when(
         data: (items) {
           if (items.isEmpty) {
