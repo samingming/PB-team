@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -7,12 +8,22 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
+import 'package:url_launcher/url_launcher.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: '.env');
-  await Firebase.initializeApp(options: _firebaseOptionsFromEnv());
+  await _initFirebase();
   runApp(const AppRoot());
+}
+
+Future<void> _initFirebase() async {
+  try {
+    await Firebase.initializeApp(options: _firebaseOptionsFromEnv());
+  } on FirebaseException catch (e) {
+    // Hot restart 시 이미 초기화된 경우 duplicate-app 오류를 무시하고 계속 진행.
+    if (e.code != 'duplicate-app') rethrow;
+  }
 }
 
 FirebaseOptions _firebaseOptionsFromEnv() {
@@ -371,10 +382,49 @@ class _MainScreenState extends State<MainScreen> {
   bool _hasMorePopular = true;
   int _popularPage = 1;
   String _searchQuery = '';
+  List<Movie> _searchSuggestions = [];
+  List<String> _recentSearches = [];
+  List<Movie> _searchResultsRaw = [];
+  Map<int, String> _genres = {};
+  int? _selectedGenreId;
+  String? _selectedYear;
+  double _minRating = 0;
+  String _sortOption = 'popularity';
   List<Movie> _nowPlaying = [];
   List<Movie> _popular = [];
   List<Movie> _searchResults = [];
   List<WishlistItem> _wishlist = [];
+  List<TrailerInfo> _heroPlaylist = [];
+  int _heroIndex = 0;
+  bool _heroLoading = false;
+  String? _heroError;
+  Timer? _suggestionDebounce;
+
+  // Fallback trailers known to allow embedding (demo-safe).
+  static final List<TrailerInfo> _fallbackTrailers = [
+  TrailerInfo(
+    movie: Movie(
+      id: -1,
+      title: 'Big Buck Bunny',
+      overview: 'Open movie project trailer (embed-friendly).',
+      posterPath: null,
+      backdropPath: null,
+    ),
+    videoKey: 'aqz-KE-bpKQ',
+    name: 'Big Buck Bunny Trailer',
+  ),
+  TrailerInfo(
+    movie: Movie(
+      id: -2,
+      title: 'Sintel',
+      overview: 'Blender open movie trailer (embed-friendly).',
+      posterPath: null,
+      backdropPath: null,
+    ),
+    videoKey: 'eRsGyueVLvQ',
+    name: 'Sintel Trailer',
+  ),
+];
 
   late final TmdbApi _tmdb;
 
@@ -385,10 +435,17 @@ class _MainScreenState extends State<MainScreen> {
     _loadInitial();
   }
 
+  @override
+  void dispose() {
+    _suggestionDebounce?.cancel();
+    super.dispose();
+  }
+
   Future<void> _loadInitial() async {
     await Future.wait([
       _loadMovies(),
       _loadWishlist(),
+      _loadGenres(),
     ]);
   }
 
@@ -408,10 +465,22 @@ class _MainScreenState extends State<MainScreen> {
         _popularPage = 1;
         _hasMorePopular = popular.isNotEmpty;
       });
+      await _loadHeroPlaylist();
     } catch (e) {
       _showMessage('Failed to load movies: $e');
     } finally {
       if (mounted) setState(() => _loadingMovies = false);
+    }
+  }
+
+  Future<void> _loadGenres() async {
+    if (_tmdb.apiKey.isEmpty) return;
+    try {
+      final genres = await _tmdb.genres();
+      if (!mounted) return;
+      setState(() => _genres = genres);
+    } catch (_) {
+      // best-effort: ignore genre load errors
     }
   }
 
@@ -433,6 +502,67 @@ class _MainScreenState extends State<MainScreen> {
     } finally {
       if (mounted) setState(() => _loadingPopular = false);
     }
+  }
+
+  Future<void> _loadHeroPlaylist() async {
+    final candidates = [
+      ..._popular,
+      ..._nowPlaying,
+    ];
+    if (candidates.isEmpty) {
+      setState(() {
+        _heroPlaylist = [];
+        _heroError = '트레일러를 보여줄 영화가 없습니다.';
+      });
+      return;
+    }
+
+    setState(() {
+      _heroLoading = true;
+      _heroError = null;
+      _heroPlaylist = [];
+      _heroIndex = 0;
+    });
+
+    final seen = <int>{};
+    final List<TrailerInfo> playlist = [];
+    for (final movie in candidates) {
+      if (seen.contains(movie.id)) continue;
+      seen.add(movie.id);
+      try {
+        final video = await _tmdb.trailer(movie.id);
+        if (video != null && video.key.isNotEmpty) {
+          playlist.add(
+            TrailerInfo(movie: movie, videoKey: video.key, name: video.name),
+          );
+        }
+      } catch (_) {
+        // ignore individual failures
+      }
+      if (playlist.length >= 5) break;
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _heroPlaylist = playlist;
+      _heroError = playlist.isEmpty ? '예고편을 찾을 수 없어요.' : null;
+      _heroIndex = 0;
+    });
+    if (mounted) setState(() => _heroLoading = false);
+  }
+
+  void _nextHero() {
+    if (_heroPlaylist.length <= 1) return;
+    setState(() {
+      _heroIndex = (_heroIndex + 1) % _heroPlaylist.length;
+    });
+  }
+
+  void _setHeroIndex(int index) {
+    if (index < 0 || index >= _heroPlaylist.length) return;
+    setState(() {
+      _heroIndex = index;
+    });
   }
 
   Future<void> _loadWishlist() async {
@@ -475,25 +605,326 @@ class _MainScreenState extends State<MainScreen> {
     }
   }
 
+  Future<void> _showMovieDetails(Movie movie) async {
+    if (_tmdb.apiKey.isEmpty) {
+      _showMessage('Missing TMDB API key.');
+      return;
+    }
+    final theme = Theme.of(context);
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: theme.colorScheme.surface,
+      showDragHandle: true,
+      builder: (context) {
+        return FutureBuilder<MovieDetail>(
+          future: _tmdb.movieDetail(movie.id),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const SizedBox(
+                height: 280,
+                child: Center(child: CircularProgressIndicator()),
+              );
+            }
+            if (snapshot.hasError) {
+              return Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text('세부 정보를 불러오지 못했습니다: ${snapshot.error}'),
+              );
+            }
+            final detail = snapshot.data ?? MovieDetail.fromMovie(movie);
+            final wishlisted = _wishlist.any((w) => w.id == detail.id);
+            final imageUrl = detail.backdropUrl ?? detail.posterUrl;
+            final directorText = detail.directors.isNotEmpty ? detail.directors.join(', ') : '정보 없음';
+            final castNames = detail.cast.take(6).map((c) => c.name).where((n) => n.isNotEmpty).toList();
+            final runtimeText = detail.runtime != null ? '${detail.runtime}분' : '정보 없음';
+            final releaseYear =
+                (detail.releaseDate != null && detail.releaseDate!.isNotEmpty) ? detail.releaseDate!.split('-').first : '정보 없음';
+
+            return StatefulBuilder(
+              builder: (context, setSheetState) {
+                return SingleChildScrollView(
+                  padding: EdgeInsets.only(
+                    left: 16,
+                    right: 16,
+                    top: 12,
+                    bottom: MediaQuery.of(context).padding.bottom + 16,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (imageUrl != null)
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: AspectRatio(
+                            aspectRatio: 16 / 9,
+                            child: Image.network(imageUrl, fit: BoxFit.cover),
+                          ),
+                        ),
+                      const SizedBox(height: 12),
+                      Text(
+                        detail.title,
+                        style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 12,
+                        runSpacing: 8,
+                        children: [
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.star, color: Colors.amber, size: 18),
+                              const SizedBox(width: 4),
+                              Text(detail.voteAverage?.toStringAsFixed(1) ?? 'NR'),
+                            ],
+                          ),
+                          Text('러닝타임: $runtimeText'),
+                          Text('개봉연도: $releaseYear'),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      if (detail.genres.isNotEmpty)
+                        Wrap(
+                          spacing: 8,
+                          children: detail.genres.map((g) => Chip(label: Text(g))).toList(),
+                        ),
+                      const SizedBox(height: 8),
+                      Text(
+                        detail.overview.isNotEmpty ? detail.overview : 'No overview available.',
+                        style: theme.textTheme.bodyMedium,
+                      ),
+                      const SizedBox(height: 12),
+                      Text('감독: $directorText', style: theme.textTheme.bodyMedium),
+                      if (castNames.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Text('주요 출연: ${castNames.join(', ')}', style: theme.textTheme.bodyMedium),
+                      ],
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          FilledButton.icon(
+                            onPressed: () async {
+                              await _toggleWishlist(detail);
+                              if (context.mounted) setSheetState(() {});
+                            },
+                            icon: Icon(wishlisted ? Icons.favorite : Icons.favorite_border),
+                            label: Text(wishlisted ? '위시리스트 제거' : '위시리스트 추가'),
+                          ),
+                          const SizedBox(width: 8),
+                          OutlinedButton.icon(
+                            onPressed: () {
+                              final url = Uri.parse('https://www.themoviedb.org/movie/${detail.id}');
+                              launchUrl(url, mode: LaunchMode.externalApplication);
+                            },
+                            icon: const Icon(Icons.open_in_new),
+                            label: const Text('TMDB에서 보기'),
+                          ),
+                          const SizedBox(width: 8),
+                          OutlinedButton.icon(
+                            onPressed: Navigator.of(context).maybePop,
+                            icon: const Icon(Icons.close),
+                            label: const Text('닫기'),
+                          ),
+                        ],
+                      ),
+                      if (detail.similar.isNotEmpty) ...[
+                        const SizedBox(height: 16),
+                        Text('비슷한 작품', style: theme.textTheme.titleMedium),
+                        const SizedBox(height: 8),
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: detail.similar.take(12).map((m) {
+                              return Padding(
+                                padding: const EdgeInsets.only(right: 12),
+                                child: InkWell(
+                                  onTap: () {
+                                    Navigator.of(context).pop();
+                                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                                      _showMovieDetails(m);
+                                    });
+                                  },
+                                  child: SizedBox(
+                                    width: 120,
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        AspectRatio(
+                                          aspectRatio: 2 / 3,
+                                          child: ClipRRect(
+                                            borderRadius: BorderRadius.circular(12),
+                                            child: m.posterUrl != null
+                                                ? Image.network(m.posterUrl!, fit: BoxFit.cover)
+                                                : Container(
+                                                    color: Colors.black12,
+                                                    child: const Center(child: Text('No Image')),
+                                                  ),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Text(
+                                          m.title,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
   Future<void> _handleSearch() async {
     if (_searchQuery.trim().isEmpty) {
-      setState(() => _searchResults = []);
+      setState(() {
+        _searchResults = [];
+        _searchSuggestions = [];
+      });
       return;
     }
 
+    if (_tmdb.apiKey.isEmpty) {
+      _showMessage('Missing TMDB API key.');
+      return;
+    }
+
+    final query = _searchQuery.trim();
     setState(() => _loadingSearch = true);
     try {
-      final results = await _tmdb.search(_searchQuery.trim());
+      final results = await _tmdb.search(query);
       if (!mounted) return;
+      final filtered = _applySearchFilters(results);
       setState(() {
-        _searchResults = results.take(12).toList();
+        _searchResultsRaw = results;
+        _searchResults = filtered;
+        _searchSuggestions = [];
         _tabIndex = 2;
       });
+      _addRecentSearch(query);
     } catch (e) {
       _showMessage('Search failed: $e');
     } finally {
       if (mounted) setState(() => _loadingSearch = false);
     }
+  }
+
+  void _onSearchQueryChanged(String value) {
+    setState(() => _searchQuery = value);
+    _suggestionDebounce?.cancel();
+    final trimmed = value.trim();
+    if (trimmed.length < 2) {
+      setState(() => _searchSuggestions = []);
+      return;
+    }
+    _suggestionDebounce = Timer(const Duration(milliseconds: 350), () => _loadSuggestions(trimmed));
+  }
+
+  Future<void> _loadSuggestions(String query) async {
+    if (_tmdb.apiKey.isEmpty) return;
+    try {
+      final results = await _tmdb.search(query);
+      if (!mounted) return;
+      setState(() => _searchSuggestions = results.take(6).toList());
+    } catch (_) {
+      // ignore suggestion errors
+    }
+  }
+
+  void _addRecentSearch(String query) {
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) return;
+    final next = [trimmed, ..._recentSearches.where((q) => q.toLowerCase() != trimmed.toLowerCase())];
+    setState(() => _recentSearches = next.take(6).toList());
+  }
+
+  List<Movie> _applySearchFilters(List<Movie> results) {
+    final filtered = results.where((movie) {
+      if (_selectedGenreId != null && _selectedGenreId != 0 && !movie.genreIds.contains(_selectedGenreId)) {
+        return false;
+      }
+      if (_selectedYear != null && _selectedYear!.isNotEmpty) {
+        final year = (movie.releaseDate ?? '').split('-').first;
+        if (year != _selectedYear) return false;
+      }
+      if (_minRating > 0 && (movie.voteAverage ?? 0) < _minRating) {
+        return false;
+      }
+      return true;
+    }).toList();
+
+    int compareDate(Movie a, Movie b) {
+      DateTime? parse(String? value) {
+        if (value == null || value.isEmpty) return null;
+        try {
+          return DateTime.tryParse(value);
+        } catch (_) {
+          return null;
+        }
+      }
+
+      final da = parse(a.releaseDate);
+      final db = parse(b.releaseDate);
+      if (da == null && db == null) return 0;
+      if (da == null) return 1;
+      if (db == null) return -1;
+      return db.compareTo(da);
+    }
+
+    switch (_sortOption) {
+      case 'rating':
+        filtered.sort((a, b) => (b.voteAverage ?? 0).compareTo(a.voteAverage ?? 0));
+        break;
+      case 'newest':
+        filtered.sort(compareDate);
+        break;
+      case 'popularity':
+      default:
+        filtered.sort((a, b) => (b.popularity ?? 0).compareTo(a.popularity ?? 0));
+    }
+    return filtered;
+  }
+
+  void _setGenre(int? genreId) {
+    setState(() {
+      _selectedGenreId = genreId;
+      _searchResults = _applySearchFilters(_searchResultsRaw);
+    });
+  }
+
+  void _setYear(String? year) {
+    setState(() {
+      _selectedYear = year;
+      _searchResults = _applySearchFilters(_searchResultsRaw);
+    });
+  }
+
+  void _setMinRating(double rating) {
+    setState(() {
+      _minRating = rating;
+      _searchResults = _applySearchFilters(_searchResultsRaw);
+    });
+  }
+
+  void _setSortOption(String option) {
+    setState(() {
+      _sortOption = option;
+      _searchResults = _applySearchFilters(_searchResultsRaw);
+    });
   }
 
   Future<void> _handleLogout() async {
@@ -515,10 +946,14 @@ class _MainScreenState extends State<MainScreen> {
         popular: _popular,
         wishlist: _wishlist,
         loading: _loadingMovies,
-        searchQuery: _searchQuery,
-        onSearchQueryChanged: (value) => setState(() => _searchQuery = value),
-        onSearch: _handleSearch,
+        playlist: _heroPlaylist,
+        currentTrailerIndex: _heroIndex,
+        loadingTrailer: _heroLoading,
+        trailerError: _heroError,
+        onNextTrailer: _nextHero,
+        onSetTrailerIndex: _setHeroIndex,
         onToggleWishlist: _toggleWishlist,
+        onOpenDetails: _showMovieDetails,
       ),
       _PopularTab(
         popular: _popular,
@@ -527,19 +962,41 @@ class _MainScreenState extends State<MainScreen> {
         hasMore: _hasMorePopular,
         onLoadMore: _loadPopularMore,
         onToggleWishlist: _toggleWishlist,
+        onOpenDetails: _showMovieDetails,
       ),
       _SearchTab(
         results: _searchResults,
         wishlist: _wishlist,
         loading: _loadingSearch,
         searchQuery: _searchQuery,
-        onSearchQueryChanged: (value) => setState(() => _searchQuery = value),
+        suggestions: _searchSuggestions,
+        recentSearches: _recentSearches,
+        genreOptions: _genres,
+        selectedGenreId: _selectedGenreId,
+        selectedYear: _selectedYear,
+        minRating: _minRating,
+        sortOption: _sortOption,
+        onSearchQueryChanged: _onSearchQueryChanged,
         onSearch: _handleSearch,
         onToggleWishlist: _toggleWishlist,
+        onSuggestionTap: (value) {
+          _onSearchQueryChanged(value);
+          _handleSearch();
+        },
+        onRecentTap: (value) {
+          _onSearchQueryChanged(value);
+          _handleSearch();
+        },
+        onSelectGenre: _setGenre,
+        onSelectYear: _setYear,
+        onRatingChanged: _setMinRating,
+        onSortChanged: _setSortOption,
+        onOpenDetails: _showMovieDetails,
       ),
       _WishlistTab(
         wishlist: _wishlist,
         onToggleWishlist: _toggleWishlist,
+        onOpenDetails: _showMovieDetails,
       ),
     ];
 
@@ -615,26 +1072,45 @@ class _HomeTab extends StatelessWidget {
     required this.popular,
     required this.wishlist,
     required this.loading,
-    required this.searchQuery,
-    required this.onSearchQueryChanged,
-    required this.onSearch,
+    required this.playlist,
+    required this.currentTrailerIndex,
+    required this.loadingTrailer,
+    required this.trailerError,
+    required this.onNextTrailer,
+    required this.onSetTrailerIndex,
     required this.onToggleWishlist,
+    required this.onOpenDetails,
   });
 
   final List<Movie> nowPlaying;
   final List<Movie> popular;
   final List<WishlistItem> wishlist;
   final bool loading;
-  final String searchQuery;
-  final ValueChanged<String> onSearchQueryChanged;
-  final VoidCallback onSearch;
+  final List<TrailerInfo> playlist;
+  final int currentTrailerIndex;
+  final bool loadingTrailer;
+  final String? trailerError;
+  final VoidCallback onNextTrailer;
+  final ValueChanged<int> onSetTrailerIndex;
   final ValueChanged<Movie> onToggleWishlist;
+  final ValueChanged<Movie> onOpenDetails;
 
   @override
   Widget build(BuildContext context) {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        if (playlist.isNotEmpty || loadingTrailer || (trailerError != null && trailerError!.isNotEmpty)) ...[
+          _TrailerBanner(
+            playlist: playlist,
+            currentIndex: currentTrailerIndex,
+            onNext: onNextTrailer,
+            onSetIndex: onSetTrailerIndex,
+            loading: loadingTrailer,
+            error: trailerError,
+          ),
+          const SizedBox(height: 16),
+        ],
         Text(
           'TMDB picks for you',
           style: Theme.of(context).textTheme.headlineSmall,
@@ -643,12 +1119,6 @@ class _HomeTab extends StatelessWidget {
         Text(
           'Trending movies, top titles, and upcoming gems.',
           style: Theme.of(context).textTheme.bodyMedium,
-        ),
-        const SizedBox(height: 16),
-        _SearchRow(
-          value: searchQuery,
-          onChanged: onSearchQueryChanged,
-          onSearch: onSearch,
         ),
         if (loading) const Padding(
           padding: EdgeInsets.symmetric(vertical: 16),
@@ -660,6 +1130,7 @@ class _HomeTab extends StatelessWidget {
           movies: popular,
           wishlist: wishlist,
           onToggleWishlist: onToggleWishlist,
+          onOpenDetails: onOpenDetails,
         ),
         const SizedBox(height: 16),
         _MovieSection(
@@ -667,8 +1138,190 @@ class _HomeTab extends StatelessWidget {
           movies: nowPlaying,
           wishlist: wishlist,
           onToggleWishlist: onToggleWishlist,
+          onOpenDetails: onOpenDetails,
         ),
       ],
+    );
+  }
+}
+
+
+class _TrailerBanner extends StatelessWidget {
+  const _TrailerBanner({
+    required this.playlist,
+    required this.currentIndex,
+    required this.onNext,
+    required this.onSetIndex,
+    required this.loading,
+    required this.error,
+  });
+
+  final List<TrailerInfo> playlist;
+  final int currentIndex;
+  final VoidCallback onNext;
+  final ValueChanged<int> onSetIndex;
+  final bool loading;
+  final String? error;
+
+  Future<void> _openInYoutube(BuildContext context, String videoKey) async {
+    if (videoKey.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('유효한 트레일러가 없어요.')),
+      );
+      return;
+    }
+    final url = Uri.parse('https://www.youtube.com/watch?v=$videoKey');
+    final launched = await launchUrl(url, mode: LaunchMode.externalApplication);
+    if (!launched) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('YouTube를 열 수 없어요.')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (loading) {
+      return const _BannerShell(
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (error != null && error!.isNotEmpty) {
+      return _BannerShell(
+        child: Text(
+          error!,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.white),
+        ),
+      );
+    }
+    if (playlist.isEmpty || currentIndex >= playlist.length) {
+      return const SizedBox.shrink();
+    }
+    final trailer = playlist[currentIndex];
+
+    final imageUrl = trailer.backdropUrl ?? trailer.movie.posterUrl;
+    return _BannerShell(
+      imageUrl: imageUrl,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Exclusive Trailer',
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: Colors.white70,
+                  letterSpacing: 0.5,
+                ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            trailer.movie.title,
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            trailer.movie.overview.isNotEmpty
+                ? trailer.movie.overview
+                : 'No overview available.',
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.white70),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              OutlinedButton.icon(
+                onPressed: onNext,
+                icon: const Icon(Icons.skip_next),
+                label: const Text('Next trailer'),
+                style: OutlinedButton.styleFrom(foregroundColor: Colors.white),
+              ),
+              OutlinedButton.icon(
+                onPressed: () => _openInYoutube(context, trailer.videoKey),
+                icon: const Icon(Icons.open_in_new),
+                label: const Text('Watch on YouTube'),
+                style: OutlinedButton.styleFrom(foregroundColor: Colors.white),
+              ),
+            ],
+          ),
+          if (playlist.length > 1) ...[
+            const SizedBox(height: 12),
+            Row(
+              children: List.generate(
+                playlist.length,
+                (idx) => Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: GestureDetector(
+                    onTap: () => onSetIndex(idx),
+                    child: Container(
+                      width: 10,
+                      height: 10,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: idx == currentIndex ? Colors.white : Colors.white38,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _BannerShell extends StatelessWidget {
+  const _BannerShell({this.imageUrl, required this.child});
+
+  final String? imageUrl;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 360, maxHeight: 520),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade900,
+          image: imageUrl == null
+              ? null
+              : DecorationImage(
+                  image: NetworkImage(imageUrl!),
+                  fit: BoxFit.cover,
+                ),
+        ),
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.bottomCenter,
+                    end: Alignment.topCenter,
+                    colors: [
+                      Colors.black.withOpacity(0.65),
+                      Colors.black.withOpacity(0.25),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            Positioned.fill(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: child,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -681,6 +1334,7 @@ class _PopularTab extends StatelessWidget {
     required this.hasMore,
     required this.onLoadMore,
     required this.onToggleWishlist,
+    required this.onOpenDetails,
   });
 
   final List<Movie> popular;
@@ -689,6 +1343,7 @@ class _PopularTab extends StatelessWidget {
   final bool hasMore;
   final VoidCallback onLoadMore;
   final ValueChanged<Movie> onToggleWishlist;
+  final ValueChanged<Movie> onOpenDetails;
 
   @override
   Widget build(BuildContext context) {
@@ -705,6 +1360,7 @@ class _PopularTab extends StatelessWidget {
             movie: movie,
             isWishlisted: wishlist.any((w) => w.id == movie.id),
             onToggleWishlist: () => onToggleWishlist(movie),
+            onOpenDetails: () => onOpenDetails(movie),
           ),
         ),
         if (hasMore)
@@ -728,21 +1384,50 @@ class _SearchTab extends StatelessWidget {
     required this.wishlist,
     required this.loading,
     required this.searchQuery,
+    required this.suggestions,
+    required this.recentSearches,
+    required this.genreOptions,
+    required this.selectedGenreId,
+    required this.selectedYear,
+    required this.minRating,
+    required this.sortOption,
     required this.onSearchQueryChanged,
     required this.onSearch,
     required this.onToggleWishlist,
+    required this.onSuggestionTap,
+    required this.onRecentTap,
+    required this.onSelectGenre,
+    required this.onSelectYear,
+    required this.onRatingChanged,
+    required this.onSortChanged,
+    required this.onOpenDetails,
   });
 
   final List<Movie> results;
   final List<WishlistItem> wishlist;
   final bool loading;
   final String searchQuery;
+  final List<Movie> suggestions;
+  final List<String> recentSearches;
+  final Map<int, String> genreOptions;
+  final int? selectedGenreId;
+  final String? selectedYear;
+  final double minRating;
+  final String sortOption;
   final ValueChanged<String> onSearchQueryChanged;
   final VoidCallback onSearch;
   final ValueChanged<Movie> onToggleWishlist;
+  final ValueChanged<String> onSuggestionTap;
+  final ValueChanged<String> onRecentTap;
+  final ValueChanged<int?> onSelectGenre;
+  final ValueChanged<String?> onSelectYear;
+  final ValueChanged<double> onRatingChanged;
+  final ValueChanged<String> onSortChanged;
+  final ValueChanged<Movie> onOpenDetails;
 
   @override
   Widget build(BuildContext context) {
+    final years = List<String>.generate(15, (i) => '${DateTime.now().year - i}');
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -756,6 +1441,101 @@ class _SearchTab extends StatelessWidget {
           onChanged: onSearchQueryChanged,
           onSearch: onSearch,
         ),
+        if (suggestions.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Text('자동완성', style: Theme.of(context).textTheme.labelLarge),
+          const SizedBox(height: 4),
+          ...suggestions.map(
+            (movie) => ListTile(
+              dense: true,
+              title: Text(movie.title),
+              subtitle: movie.releaseDate != null ? Text(movie.releaseDate!) : null,
+              onTap: () => onSuggestionTap(movie.title),
+            ),
+          ),
+        ],
+        if (recentSearches.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Text('최근 검색어', style: Theme.of(context).textTheme.labelLarge),
+          const SizedBox(height: 4),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: recentSearches
+                .map((q) => ActionChip(label: Text(q), onPressed: () => onRecentTap(q)))
+                .toList(),
+          ),
+        ],
+        const SizedBox(height: 12),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('필터 & 정렬', style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: [
+                    SizedBox(
+                      width: 180,
+                      child: DropdownButtonFormField<int?>(
+                        value: selectedGenreId,
+                        decoration: const InputDecoration(labelText: '장르'),
+                        items: [
+                          const DropdownMenuItem<int?>(value: null, child: Text('전체')),
+                          ...genreOptions.entries.map(
+                            (e) => DropdownMenuItem<int?>(value: e.key, child: Text(e.value)),
+                          ),
+                        ],
+                        onChanged: onSelectGenre,
+                      ),
+                    ),
+                    SizedBox(
+                      width: 140,
+                      child: DropdownButtonFormField<String?>(
+                        value: selectedYear,
+                        decoration: const InputDecoration(labelText: '년도'),
+                        items: [
+                          const DropdownMenuItem<String?>(value: null, child: Text('전체')),
+                          ...years.map((y) => DropdownMenuItem<String?>(value: y, child: Text(y))),
+                        ],
+                        onChanged: onSelectYear,
+                      ),
+                    ),
+                    SizedBox(
+                      width: 160,
+                      child: DropdownButtonFormField<String>(
+                        value: sortOption,
+                        decoration: const InputDecoration(labelText: '정렬'),
+                        items: const [
+                          DropdownMenuItem(value: 'popularity', child: Text('인기순')),
+                          DropdownMenuItem(value: 'rating', child: Text('평점순')),
+                          DropdownMenuItem(value: 'newest', child: Text('최신순')),
+                        ],
+                        onChanged: (value) {
+                          if (value != null) onSortChanged(value);
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Text('최소 평점: ${minRating.toStringAsFixed(1)}'),
+                Slider(
+                  value: minRating,
+                  min: 0,
+                  max: 10,
+                  divisions: 20,
+                  label: minRating.toStringAsFixed(1),
+                  onChanged: onRatingChanged,
+                ),
+              ],
+            ),
+          ),
+        ),
         if (loading) const Padding(
           padding: EdgeInsets.symmetric(vertical: 16),
           child: Center(child: CircularProgressIndicator()),
@@ -766,6 +1546,7 @@ class _SearchTab extends StatelessWidget {
             movie: movie,
             isWishlisted: wishlist.any((w) => w.id == movie.id),
             onToggleWishlist: () => onToggleWishlist(movie),
+            onOpenDetails: () => onOpenDetails(movie),
           ),
         ),
       ],
@@ -777,10 +1558,12 @@ class _WishlistTab extends StatelessWidget {
   const _WishlistTab({
     required this.wishlist,
     required this.onToggleWishlist,
+    required this.onOpenDetails,
   });
 
   final List<WishlistItem> wishlist;
   final ValueChanged<Movie> onToggleWishlist;
+  final ValueChanged<Movie> onOpenDetails;
 
   @override
   Widget build(BuildContext context) {
@@ -804,6 +1587,7 @@ class _WishlistTab extends StatelessWidget {
               title: item.title,
               overview: '',
               posterPath: item.posterPath,
+              backdropPath: null,
             ),
             isWishlisted: true,
             onToggleWishlist: () => onToggleWishlist(
@@ -812,6 +1596,16 @@ class _WishlistTab extends StatelessWidget {
                 title: item.title,
                 overview: '',
                 posterPath: item.posterPath,
+                backdropPath: null,
+              ),
+            ),
+            onOpenDetails: () => onOpenDetails(
+              Movie(
+                id: item.id,
+                title: item.title,
+                overview: '',
+                posterPath: item.posterPath,
+                backdropPath: null,
               ),
             ),
           ),
@@ -862,12 +1656,14 @@ class _MovieSection extends StatelessWidget {
     required this.movies,
     required this.wishlist,
     required this.onToggleWishlist,
+    required this.onOpenDetails,
   });
 
   final String title;
   final List<Movie> movies;
   final List<WishlistItem> wishlist;
   final ValueChanged<Movie> onToggleWishlist;
+  final ValueChanged<Movie> onOpenDetails;
 
   @override
   Widget build(BuildContext context) {
@@ -889,6 +1685,7 @@ class _MovieSection extends StatelessWidget {
                 movie: movie,
                 isWishlisted: isWishlisted,
                 onToggleWishlist: () => onToggleWishlist(movie),
+                onOpenDetails: () => onOpenDetails(movie),
               );
             },
           ),
@@ -903,11 +1700,13 @@ class _MovieCard extends StatelessWidget {
     required this.movie,
     required this.isWishlisted,
     required this.onToggleWishlist,
+    required this.onOpenDetails,
   });
 
   final Movie movie;
   final bool isWishlisted;
   final VoidCallback onToggleWishlist;
+  final VoidCallback onOpenDetails;
 
   @override
   Widget build(BuildContext context) {
@@ -915,41 +1714,44 @@ class _MovieCard extends StatelessWidget {
       width: 160,
       child: Card(
         clipBehavior: Clip.antiAlias,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(
-              child: Stack(
-                children: [
-                  Positioned.fill(
-                    child: movie.posterUrl != null
-                        ? Image.network(movie.posterUrl!, fit: BoxFit.cover)
-                        : Container(
-                            color: Colors.black12,
-                            child: const Center(child: Text('No Image')),
-                          ),
-                  ),
-                  Positioned(
-                    top: 8,
-                    right: 8,
-                    child: IconButton.filled(
-                      icon: Icon(isWishlisted ? Icons.favorite : Icons.favorite_border),
-                      onPressed: onToggleWishlist,
+        child: InkWell(
+          onTap: onOpenDetails,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: movie.posterUrl != null
+                          ? Image.network(movie.posterUrl!, fit: BoxFit.cover)
+                          : Container(
+                              color: Colors.black12,
+                              child: const Center(child: Text('No Image')),
+                            ),
                     ),
-                  ),
-                ],
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: IconButton.filled(
+                        icon: Icon(isWishlisted ? Icons.favorite : Icons.favorite_border),
+                        onPressed: onToggleWishlist,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(8),
-              child: Text(
-                movie.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodyLarge,
+              Padding(
+                padding: const EdgeInsets.all(8),
+                child: Text(
+                  movie.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodyLarge,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -961,54 +1763,59 @@ class _MovieRow extends StatelessWidget {
     required this.movie,
     required this.isWishlisted,
     required this.onToggleWishlist,
+    required this.onOpenDetails,
   });
 
   final Movie movie;
   final bool isWishlisted;
   final VoidCallback onToggleWishlist;
+  final VoidCallback onOpenDetails;
 
   @override
   Widget build(BuildContext context) {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(
-              width: 80,
-              height: 120,
-              child: movie.posterUrl != null
-                  ? Image.network(movie.posterUrl!, fit: BoxFit.cover)
-                  : Container(
-                      color: Colors.black12,
-                      child: const Center(child: Text('No Image')),
-                    ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    movie.title,
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    movie.overview.isNotEmpty ? movie.overview : 'No overview available.',
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
+      child: InkWell(
+        onTap: onOpenDetails,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: 80,
+                height: 120,
+                child: movie.posterUrl != null
+                    ? Image.network(movie.posterUrl!, fit: BoxFit.cover)
+                    : Container(
+                        color: Colors.black12,
+                        child: const Center(child: Text('No Image')),
+                      ),
               ),
-            ),
-            IconButton(
-              icon: Icon(isWishlisted ? Icons.favorite : Icons.favorite_border),
-              onPressed: onToggleWishlist,
-            ),
-          ],
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      movie.title,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      movie.overview.isNotEmpty ? movie.overview : 'No overview available.',
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                icon: Icon(isWishlisted ? Icons.favorite : Icons.favorite_border),
+                onPressed: onToggleWishlist,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1024,18 +1831,67 @@ class TmdbApi {
   static const _baseUrl = 'https://api.themoviedb.org/3';
 
   Future<List<Movie>> nowPlaying() async {
-    return _get('/movie/now_playing', {'region': 'KR'});
+    return _getMovies('/movie/now_playing', {'region': 'KR'});
   }
 
   Future<List<Movie>> popular(int page) async {
-    return _get('/movie/popular', {'page': '$page'});
+    return _getMovies('/movie/popular', {'page': '$page'});
   }
 
   Future<List<Movie>> search(String query) async {
-    return _get('/search/movie', {'query': query});
+    return _getMovies('/search/movie', {'query': query});
   }
 
-  Future<List<Movie>> _get(String path, Map<String, String> params) async {
+  Future<MovieDetail> movieDetail(int movieId) async {
+    final data = await _getJson('/movie/$movieId', {'append_to_response': 'credits,similar'});
+    return MovieDetail.fromTmdb(data);
+  }
+
+  Future<Map<int, String>> genres() async {
+    final data = await _getJson('/genre/movie/list', {});
+    final list = (data['genres'] as List<dynamic>? ?? [])
+        .whereType<Map<String, dynamic>>()
+        .where((g) => g['id'] != null && g['name'] != null)
+        .map((g) => MapEntry(g['id'] as int, g['name'] as String))
+        .toList();
+    return {for (final entry in list) entry.key: entry.value};
+  }
+
+  Future<TmdbVideo?> trailer(int movieId) async {
+    final fetched = await videos(movieId);
+    // 우선순위: 공식 + 트레일러/티저 + 언어 en/ko -> 공식 기타 -> 나머지
+    final preferredLang = fetched.where(
+      (v) => _isPlayable(v, officialOnly: true) && _isPreferredLang(v),
+    );
+    final official = fetched.where((v) => _isPlayable(v, officialOnly: true));
+    final fallback = fetched.where((v) => _isPlayable(v, officialOnly: false));
+    final sorted = [
+      ...preferredLang,
+      ...official,
+      ...fallback,
+    ];
+    return sorted.isNotEmpty ? sorted.first : null;
+  }
+
+  Future<List<TmdbVideo>> videos(int movieId) async {
+    final data = await _getJson('/movie/$movieId/videos', {'include_video_language': language});
+    final results = (data['results'] as List<dynamic>? ?? [])
+        .whereType<Map<String, dynamic>>()
+        .map(TmdbVideo.fromTmdb)
+        .toList();
+    return results;
+  }
+
+  Future<List<Movie>> _getMovies(String path, Map<String, String> params) async {
+    final data = await _getJson(path, params);
+    final results = (data['results'] as List<dynamic>? ?? [])
+        .whereType<Map<String, dynamic>>()
+        .map(Movie.fromTmdb)
+        .toList();
+    return results;
+  }
+
+  Future<Map<String, dynamic>> _getJson(String path, Map<String, String> params) async {
     final uri = Uri.parse('$_baseUrl$path').replace(
       queryParameters: {
         'api_key': apiKey,
@@ -1050,12 +1906,20 @@ class TmdbApi {
     }
 
     final data = jsonDecode(response.body) as Map<String, dynamic>;
-    final results = (data['results'] as List<dynamic>? ?? [])
-        .whereType<Map<String, dynamic>>()
-        .map(Movie.fromTmdb)
-        .toList();
-    return results;
+    return data;
   }
+}
+
+bool _isPlayable(TmdbVideo video, {required bool officialOnly}) {
+  final isYoutube = video.site.toLowerCase() == 'youtube';
+  final isTrailer = video.type.toLowerCase() == 'trailer' || video.type.toLowerCase() == 'teaser';
+  final officialOk = !officialOnly || video.official;
+  return isYoutube && isTrailer && officialOk && video.key.isNotEmpty;
+}
+
+bool _isPreferredLang(TmdbVideo video) {
+  final lang = video.language.toLowerCase();
+  return lang == 'en' || lang == 'ko' || lang.isEmpty;
 }
 
 class Movie {
@@ -1064,15 +1928,31 @@ class Movie {
     required this.title,
     required this.overview,
     required this.posterPath,
+    required this.backdropPath,
+    this.voteAverage,
+    this.releaseDate,
+    this.runtime,
+    this.genres = const [],
+    this.genreIds = const [],
+    this.popularity,
   });
 
   final int id;
   final String title;
   final String overview;
   final String? posterPath;
+  final String? backdropPath;
+  final double? voteAverage;
+  final String? releaseDate;
+  final int? runtime;
+  final List<String> genres;
+  final List<int> genreIds;
+  final double? popularity;
 
   String? get posterUrl =>
       posterPath == null ? null : 'https://image.tmdb.org/t/p/w342$posterPath';
+  String? get backdropUrl =>
+      backdropPath == null ? null : 'https://image.tmdb.org/t/p/w780$backdropPath';
 
   factory Movie.fromTmdb(Map<String, dynamic> json) {
     return Movie(
@@ -1080,8 +1960,154 @@ class Movie {
       title: (json['title'] as String?) ?? '',
       overview: (json['overview'] as String?) ?? '',
       posterPath: json['poster_path'] as String?,
+      backdropPath: json['backdrop_path'] as String?,
+      voteAverage: (json['vote_average'] as num?)?.toDouble(),
+      releaseDate: json['release_date'] as String?,
+      runtime: json['runtime'] as int?,
+      genres: (json['genres'] as List<dynamic>?)
+              ?.whereType<Map<String, dynamic>>()
+              .map((g) => g['name'] as String? ?? '')
+              .where((name) => name.isNotEmpty)
+              .toList() ??
+          const [],
+      genreIds: (json['genre_ids'] as List<dynamic>?)
+              ?.whereType<int>()
+              .toList() ??
+          const [],
+      popularity: (json['popularity'] as num?)?.toDouble(),
     );
   }
+}
+
+class MovieDetail extends Movie {
+  MovieDetail({
+    required super.id,
+    required super.title,
+    required super.overview,
+    required super.posterPath,
+    required super.backdropPath,
+    super.voteAverage,
+    super.releaseDate,
+    super.runtime,
+    super.genres = const [],
+    super.genreIds = const [],
+    super.popularity,
+    this.cast = const [],
+    this.directors = const [],
+    this.similar = const [],
+  });
+
+  final List<Credit> cast;
+  final List<String> directors;
+  final List<Movie> similar;
+
+  static MovieDetail fromMovie(Movie movie) {
+    return MovieDetail(
+      id: movie.id,
+      title: movie.title,
+      overview: movie.overview,
+      posterPath: movie.posterPath,
+      backdropPath: movie.backdropPath,
+      voteAverage: movie.voteAverage,
+      releaseDate: movie.releaseDate,
+      runtime: movie.runtime,
+      genres: movie.genres,
+      genreIds: movie.genreIds,
+      popularity: movie.popularity,
+    );
+  }
+
+  factory MovieDetail.fromTmdb(Map<String, dynamic> json) {
+    final base = Movie.fromTmdb(json);
+    final credits = (json['credits'] as Map<String, dynamic>?) ?? {};
+    final cast = (credits['cast'] as List<dynamic>? ?? [])
+        .whereType<Map<String, dynamic>>()
+        .map(Credit.fromCast)
+        .toList();
+    final directors = (credits['crew'] as List<dynamic>? ?? [])
+        .whereType<Map<String, dynamic>>()
+        .where((c) => (c['job'] as String?)?.toLowerCase() == 'director')
+        .map((c) => (c['name'] as String?) ?? '')
+        .where((name) => name.isNotEmpty)
+        .toList();
+    final similar = (json['similar'] as Map<String, dynamic>? ?? {})['results'] as List<dynamic>? ?? [];
+    return MovieDetail(
+      id: base.id,
+      title: base.title,
+      overview: base.overview,
+      posterPath: base.posterPath,
+      backdropPath: base.backdropPath,
+      voteAverage: base.voteAverage,
+      releaseDate: base.releaseDate,
+      runtime: base.runtime,
+      genres: base.genres,
+      genreIds: base.genreIds,
+      popularity: base.popularity,
+      cast: cast,
+      directors: directors,
+      similar: similar.whereType<Map<String, dynamic>>().map(Movie.fromTmdb).toList(),
+    );
+  }
+}
+
+class Credit {
+  Credit({required this.name, required this.role});
+
+  final String name;
+  final String role;
+
+  factory Credit.fromCast(Map<String, dynamic> json) {
+    return Credit(
+      name: (json['name'] as String?) ?? '',
+      role: (json['character'] as String?) ?? '',
+    );
+  }
+}
+
+class TmdbVideo {
+  TmdbVideo({
+    required this.key,
+    required this.site,
+    required this.type,
+    required this.name,
+    required this.official,
+    required this.language,
+    required this.country,
+  });
+
+  final String key;
+  final String site;
+  final String type;
+  final String name;
+  final bool official;
+  final String language;
+  final String country;
+
+  factory TmdbVideo.fromTmdb(Map<String, dynamic> json) {
+    return TmdbVideo(
+      key: (json['key'] as String?) ?? '',
+      site: (json['site'] as String?) ?? '',
+      type: (json['type'] as String?) ?? '',
+      name: (json['name'] as String?) ?? '',
+      official: (json['official'] as bool?) ?? false,
+      language: (json['iso_639_1'] as String?) ?? '',
+      country: (json['iso_3166_1'] as String?) ?? '',
+    );
+  }
+}
+
+class TrailerInfo {
+  TrailerInfo({
+    required this.movie,
+    required this.videoKey,
+    required this.name,
+  });
+
+  final Movie movie;
+  final String videoKey;
+  final String name;
+
+  String? get backdropUrl => movie.backdropUrl ?? movie.posterUrl;
 }
 
 class WishlistItem {
