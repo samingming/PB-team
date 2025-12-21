@@ -125,7 +125,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen>
 
   @override
   Widget build(BuildContext context) {
-    final height = _mode == _AuthMode.signup ? 520.0 : 420.0;
+    final height = _mode == _AuthMode.signup ? 500.0 : 410.0;
     final fade = Tween<double>(begin: 0, end: 1).animate(
       CurvedAnimation(parent: _controller, curve: const Interval(0.45, 1)),
     );
@@ -139,12 +139,15 @@ class _AuthScreenState extends ConsumerState<AuthScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'YEEMIN',
-                style: const TextStyle(
-                  color: _accent,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 22,
+              Center(
+                child: Text(
+                  'YEEMIN',
+                  style: const TextStyle(
+                    color: _accent,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 22,
+                  ),
+                  textAlign: TextAlign.center,
                 ),
               ),
               const SizedBox(height: 16),
@@ -198,9 +201,11 @@ class _AuthScreenState extends ConsumerState<AuthScreen>
                                         absorbing: !_curtainOpen,
                                         child: Container(
                                           margin: const EdgeInsets.all(12),
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 16,
-                                            vertical: 12,
+                                          padding: const EdgeInsets.fromLTRB(
+                                            16,
+                                            32,
+                                            16,
+                                            10,
                                           ),
                                           decoration: BoxDecoration(
                                             color: _card,
