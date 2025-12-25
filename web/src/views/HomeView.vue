@@ -1,32 +1,20 @@
 <!-- src/views/HomeView.vue -->
 <template>
   <main class="home-page page-shell">
-    <section class="hero panel">
-      <div class="hero__content">
-        <p class="hero__eyebrow">Just for you</p>
-        <p class="hero__copy">
-          TMDB API와 연동된 실시간 인기, 상영 중, 장르 추천까지 한 곳에서 만나볼 수 있습니다.
-        </p>
-        <div class="hero__actions">
-          <RouterLink to="/popular" class="hero__cta hero__cta--primary">인기작 보기</RouterLink>
-          <RouterLink to="/search" class="hero__cta">검색하러 가기</RouterLink>
-        </div>
-      </div>
-      <div class="hero__stats">
-        <div class="stat">
-          <strong>24K+</strong>
-          <span>TMDB Movies</span>
-        </div>
-        <div class="stat">
-          <strong>120+</strong>
-          <span>장르 조합</span>
-        </div>
-        <div class="stat">
-          <strong>∞</strong>
-          <span>나만의 위시리스트</span>
-        </div>
-      </div>
-    </section>
+    <HeroVideoBanner
+      :playlist="heroState.entries"
+      :current-index="heroState.currentIndex"
+      :muted="heroState.muted"
+      :loading="heroState.loading"
+      :error="heroState.error"
+      @next="nextHeroItem"
+      @ended="nextHeroItem"
+      @toggle-mute="toggleHeroMute"
+      @set-index="setHeroIndex"
+    />
+
+
+
 
     <section
       v-for="section in sections"
@@ -51,9 +39,8 @@
           :key="movie.id"
           :movie="movie"
           :is-wishlisted="isInWishlist(movie.id)"
-          :is-recommended="isRecommended(movie.id)"
+          :is-recommended="false"
           @toggle-wishlist="toggleWishlist"
-          @toggle-recommend="toggleRecommendation"
         />
       </div>
     </section>
@@ -62,17 +49,17 @@
 
 <script setup lang="ts">
 import { onMounted, reactive } from 'vue'
-import { RouterLink } from 'vue-router'
 import LoaderSpinner from '@/components/common/LoaderSpinner.vue'
+import HeroVideoBanner from '@/components/home/HeroVideoBanner.vue'
 import MovieCard from '@/components/movie/MovieCard.vue'
 import {
   fetchPopularMovies,
   fetchNowPlayingMovies,
   fetchDiscoverMovies,
+  fetchMovieVideos,
   type TmdbMovie,
 } from '@/services/tmdb'
 import { useWishlist } from '@/composables/useWishlist'
-import { useRecommendations } from '@/composables/useRecommendations'
 
 interface HomeSectionState {
   key: string
@@ -82,8 +69,12 @@ interface HomeSectionState {
   movies: TmdbMovie[]
 }
 
+interface HeroPlaylistEntry {
+  movie: TmdbMovie
+  videoKey: string
+}
+
 const { toggleWishlist, isInWishlist } = useWishlist()
-const { toggleRecommendation, isRecommended } = useRecommendations()
 
 const sections = reactive<HomeSectionState[]>([
   {
@@ -116,6 +107,81 @@ const sections = reactive<HomeSectionState[]>([
   },
 ])
 
+const HERO_PLAYLIST_LIMIT = 4
+const PRIORITY_TITLES = ['zootopia', '주토피아']
+
+const heroState = reactive({
+  loading: true,
+  error: null as string | null,
+  entries: [] as HeroPlaylistEntry[],
+  currentIndex: 0,
+  muted: true,
+})
+
+async function loadHeroPlaylist() {
+  heroState.loading = true
+  heroState.error = null
+  try {
+    const popular = await fetchPopularMovies(1)
+    const candidates = popular.results.slice(0, 8)
+    const playlistResults = await Promise.all(
+      candidates.map(async (movie) => {
+        try {
+          const videos = await fetchMovieVideos(movie.id)
+          const trailer = videos.results.find(
+            (v) =>
+              v.site === 'YouTube' && ['Trailer', 'Teaser'].includes(v.type ?? ''),
+          )
+          return trailer
+            ? ({
+                movie,
+                videoKey: trailer.key,
+              } as HeroPlaylistEntry)
+            : null
+        } catch (err) {
+          console.error('video fetch failed', err)
+          return null
+        }
+      }),
+    )
+    const filtered = playlistResults.filter(
+      (entry): entry is HeroPlaylistEntry => Boolean(entry),
+    )
+    const priorityIndex = filtered.findIndex((entry) => {
+      const title = entry.movie.title?.toLowerCase() ?? ''
+      return PRIORITY_TITLES.some((keyword) => title.includes(keyword.toLowerCase()))
+    })
+    if (priorityIndex > 0) {
+      const [priorityItem] = filtered.splice(priorityIndex, 1)
+      filtered.unshift(priorityItem)
+    }
+    heroState.entries = filtered.slice(0, HERO_PLAYLIST_LIMIT)
+    heroState.currentIndex = 0
+    if (!heroState.entries.length) {
+      heroState.error = '예고편을 불러오지 못했어요.'
+    }
+  } catch (err) {
+    console.error(err)
+    heroState.error = '예고편을 불러오지 못했어요.'
+  } finally {
+    heroState.loading = false
+  }
+}
+
+function nextHeroItem() {
+  if (!heroState.entries.length) return
+  heroState.currentIndex = (heroState.currentIndex + 1) % heroState.entries.length
+}
+
+function setHeroIndex(index: number) {
+  if (index < 0 || index >= heroState.entries.length) return
+  heroState.currentIndex = index
+}
+
+function toggleHeroMute() {
+  heroState.muted = !heroState.muted
+}
+
 async function loadSection(
   key: HomeSectionState['key'],
   loader: () => Promise<TmdbMovie[]>,
@@ -138,6 +204,7 @@ async function loadSection(
 
 onMounted(async () => {
   await Promise.all([
+    loadHeroPlaylist(),
     loadSection('popular', async () => {
       const res = await fetchPopularMovies(1)
       return res.results
@@ -166,82 +233,6 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: var(--space-xl);
-}
-
-.hero {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-lg);
-  background-image: linear-gradient(120deg, rgba(3, 7, 18, 0.75), rgba(3, 7, 18, 0.35)),
-    var(--hero-background, url('https://image.tmdb.org/t/p/original/8sMmAmN2x7mBiNKEX2o0aOTozEB.jpg'));
-  background-size: cover;
-  background-position: center;
-}
-
-.hero__content {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-sm);
-  color: #fff;
-}
-
-.hero__eyebrow {
-  text-transform: uppercase;
-  letter-spacing: 0.3em;
-  font-size: 0.8rem;
-  color: #fbbf24;
-  margin: 0;
-}
-
-.hero__copy {
-  max-width: 520px;
-  color: #f8fafc;
-  margin: 0 0 var(--space-md);
-}
-
-.hero__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-sm);
-}
-
-.hero__cta {
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  padding: 0.65rem 1.5rem;
-  font-weight: 600;
-  letter-spacing: 0.03em;
-}
-
-.hero__cta--primary {
-  background: var(--color-accent);
-  border-color: var(--color-accent);
-}
-
-.hero__stats {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: var(--space-sm);
-}
-
-.stat {
-  background: rgba(3, 7, 18, 0.65);
-  border-radius: var(--radius-md);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  padding: var(--space-md);
-  display: flex;
-  flex-direction: column;
-  gap: 0.1rem;
-  color: #fff;
-}
-
-.stat strong {
-  font-size: 1.8rem;
-}
-
-.stat span {
-  color: rgba(255, 255, 255, 0.8);
-  font-size: 0.85rem;
 }
 
 .section-block {
@@ -294,12 +285,6 @@ onMounted(async () => {
 .error-text {
   color: #f97373;
   font-size: 0.9rem;
-}
-
-@media (max-width: 960px) {
-  .hero {
-    grid-template-columns: 1fr;
-  }
 }
 
 @media (max-width: 700px) {
