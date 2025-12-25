@@ -22,6 +22,14 @@
           }
         },
         {
+          "client_id": "309869010872-kcf1qics0i3hl018rcqgb5c58529plfi.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.pbteam.app",
+            "certificate_hash": "348fc5a28b84472ffad8a4553c9c39ee17d153cb"
+          }
+        },
+        {
           "client_id": "309869010872-mngfli8na798j5e7hgnu7qp4sn928fq1.apps.googleusercontent.com",
           "client_type": 3
         }

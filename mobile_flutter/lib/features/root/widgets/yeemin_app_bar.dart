@@ -30,6 +30,11 @@ class YeeminAppBar extends ConsumerWidget implements PreferredSizeWidget {
           children: [
             Image.asset(
               'assets/logo-yeemin.png',
+              errorBuilder: (context, error, stackTrace) => const Icon(
+                Icons.local_movies_outlined,
+                color: _accent,
+                size: 26,
+              ),
               width: 26,
               height: 26,
               fit: BoxFit.contain,
@@ -169,7 +174,7 @@ class _SettingsButtonState extends State<_SettingsButton> {
         decoration: BoxDecoration(
           border: Border.all(color: colors.outlineVariant),
           borderRadius: BorderRadius.circular(10),
-          color: colors.surfaceVariant.withOpacity(0.1),
+          color: colors.surfaceContainerHighest,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -297,7 +302,7 @@ class _SettingsPanel extends StatelessWidget {
           Row(
             children: [
               _PillButton(
-                label: '끄기',
+                label: '줄이기',
                 active: ui.reduceMotion,
                 onTap: () {
                   if (!ui.reduceMotion) {
@@ -308,7 +313,7 @@ class _SettingsPanel extends StatelessWidget {
               ),
               const SizedBox(width: 10),
               _PillButton(
-                label: '켜기',
+                label: '유지',
                 active: !ui.reduceMotion,
                 onTap: () {
                   if (ui.reduceMotion) {

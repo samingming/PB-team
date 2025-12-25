@@ -9,7 +9,6 @@ class AppConfig {
   static const firebaseAppId = String.fromEnvironment('FIREBASE_APP_ID');
 
   static const tmdbApiKey = String.fromEnvironment('TMDB_API_KEY');
-  static const youtubeApiKey = String.fromEnvironment('YOUTUBE_API_KEY');
   static const githubClientId = String.fromEnvironment('GITHUB_CLIENT_ID');
   static const githubTokenEndpoint = String.fromEnvironment('GITHUB_TOKEN_ENDPOINT');
 
@@ -23,7 +22,6 @@ class AppConfig {
       'FIREBASE_MESSAGING_SENDER_ID': firebaseMessagingSenderId,
       'FIREBASE_APP_ID': firebaseAppId,
       'TMDB_API_KEY': tmdbApiKey,
-      'YOUTUBE_API_KEY': youtubeApiKey,
       'GITHUB_CLIENT_ID': githubClientId,
       'GITHUB_TOKEN_ENDPOINT': githubTokenEndpoint,
     };

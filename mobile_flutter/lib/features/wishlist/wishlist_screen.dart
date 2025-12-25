@@ -120,7 +120,7 @@ class WishlistScreen extends ConsumerWidget {
       }
     } catch (e) {
       messenger.showSnackBar(
-        SnackBar(content: Text('처리에 실패했어요: $e')),
+        SnackBar(content: Text('처리 중 실패했어요: $e')),
       );
     }
   }
@@ -281,7 +281,7 @@ class _EmptyState extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              '마음에 드는 영화를 찜하고 이곳에서 한 번에 확인해 보세요.',
+              '마음에 드는 영화를 추가하고 여기에서 확인해보세요.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: palette.muted,

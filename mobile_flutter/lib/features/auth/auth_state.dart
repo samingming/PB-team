@@ -17,8 +17,11 @@ class AuthStateNotifier extends Notifier<AuthStatus> {
   @override
   AuthStatus build() {
     _auth = ref.read(firebaseAuthProvider);
+    // Use singleton + explicit clientId to match Firebase web client (required for v7 API).
     _googleSignIn = GoogleSignIn.instance;
-    _googleInit = _googleSignIn.initialize();
+    _googleInit = _googleSignIn.initialize(
+      clientId: '309869010872-mngfli8na798j5e7hgnu7qp4sn928fq1.apps.googleusercontent.com',
+    );
     _sub = _auth.authStateChanges().listen((user) {
       state = user == null ? AuthStatus.signedOut : AuthStatus.signedIn;
     });
@@ -38,11 +41,12 @@ class AuthStateNotifier extends Notifier<AuthStatus> {
     await _googleInit;
     final googleUser = await _googleSignIn.authenticate();
     final googleAuth = googleUser.authentication;
-    if (googleAuth.idToken == null) {
+    final idToken = googleAuth.idToken;
+    if (idToken == null) {
       throw StateError('Google sign-in did not return an ID token.');
     }
     final credential = GoogleAuthProvider.credential(
-      idToken: googleAuth.idToken,
+      idToken: idToken,
     );
     return _auth.signInWithCredential(credential);
   }

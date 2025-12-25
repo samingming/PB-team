@@ -9,9 +9,20 @@ import 'router/app_router.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  // Avoid duplicate initialization on hot restart / lingering process.
+  try {
+    if (Firebase.apps.isEmpty) {
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+    } else {
+      Firebase.app();
+    }
+  } on FirebaseException catch (e) {
+    if (e.code != 'duplicate-app') rethrow;
+    // Safe fallback: reuse the already-initialized default app.
+    Firebase.app();
+  }
   // Optional sanity check: surface missing env keys early in dev.
   AppConfig.warnIfMissing();
   runApp(const ProviderScope(child: PbTeamApp()));
