@@ -14,6 +14,7 @@ export interface TmdbMovie {
   title: string
   overview: string
   poster_path: string | null
+  backdrop_path?: string | null
   vote_average?: number
   release_date?: string
   genre_ids?: number[]
@@ -26,6 +27,20 @@ export interface TmdbMovieDetail extends TmdbMovie {
   homepage?: string | null
   tagline?: string | null
   status?: string
+}
+
+export interface TmdbVideo {
+  id: string
+  key: string
+  name: string
+  site: string
+  type: string
+  official?: boolean
+}
+
+export interface TmdbVideoResponse {
+  id: number
+  results: TmdbVideo[]
 }
 
 export interface TmdbResponse {
@@ -175,6 +190,14 @@ class TmdbService {
       cacheTtl: DETAIL_CACHE_TTL_MS,
     })
   }
+
+  async fetchMovieVideos(movieId: number): Promise<TmdbVideoResponse> {
+    return this.request<TmdbVideoResponse>({
+      endpoint: TMDB_ENDPOINTS.videos(movieId),
+      cacheKey: `videos:${movieId}`,
+      cacheTtl: DETAIL_CACHE_TTL_MS,
+    })
+  }
 }
 
 const tmdbService = new TmdbService()
@@ -186,3 +209,4 @@ export const fetchDiscoverMovies = (extraParams = '', page = 1) =>
 export const searchMovies = (query: string, page = 1) => tmdbService.searchMovies(query, page)
 export const fetchGenres = () => tmdbService.fetchGenres()
 export const fetchMovieDetail = (movieId: number) => tmdbService.fetchMovieDetail(movieId)
+export const fetchMovieVideos = (movieId: number) => tmdbService.fetchMovieVideos(movieId)

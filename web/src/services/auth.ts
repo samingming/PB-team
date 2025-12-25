@@ -2,6 +2,7 @@ import {
   browserLocalPersistence,
   browserSessionPersistence,
   createUserWithEmailAndPassword,
+  GithubAuthProvider,
   GoogleAuthProvider,
   onAuthStateChanged,
   setPersistence,
@@ -35,6 +36,9 @@ function getFromStorages(key: string): string | null {
 
 let authReadyPromise: Promise<unknown> | null = null
 const googleProvider = new GoogleAuthProvider()
+const githubProvider = new GithubAuthProvider()
+githubProvider.addScope('read:user')
+githubProvider.addScope('user:email')
 
 export function ensureAuthReady() {
   if (!authReadyPromise) {
@@ -145,8 +149,43 @@ export async function loginWithGoogle(
   }
 }
 
+export async function loginWithGithub(
+  saveToken: boolean,
+  success: (user: User) => void,
+  fail: (msg: string) => void,
+) {
+  console.log('[GitHub login] callback URI:', getFirebaseAuthRedirectUri())
+  try {
+    const persistence = saveToken ? browserLocalPersistence : browserSessionPersistence
+    await setPersistence(auth, persistence)
+    const cred = await signInWithPopup(auth, githubProvider)
+    const userEmail = cred.user.email ?? cred.user.displayName ?? 'GitHub User'
+
+    setPersistedValue(CURRENT_USER_KEY, userEmail, saveToken)
+    clearStoredValue(TMDB_KEY_STORAGE)
+
+    if (saveToken) {
+      localStorage.setItem(KEEP_LOGIN_KEY, 'true')
+      localStorage.setItem(REMEMBER_EMAIL_KEY, userEmail)
+    } else {
+      localStorage.removeItem(KEEP_LOGIN_KEY)
+      localStorage.removeItem(REMEMBER_EMAIL_KEY)
+    }
+
+    success({ id: userEmail, password: '' })
+  } catch (err: unknown) {
+    const message =
+      err instanceof Error
+        ? err.message
+        : 'GitHub 搿滉犯?胳棎 ?ろ尐?堨姷?堧嫟. ?れ嫓 ?滊弰?挫＜?胳殧.'
+    fail(message)
+  }
+}
+
 export function getCurrentUserId(): string | null {
-  return auth.currentUser?.email ?? getFromStorages(CURRENT_USER_KEY)
+  // Rely solely on Firebase auth state so stale storage entries
+  // do not make the app think a user is logged in.
+  return auth.currentUser?.email ?? null
 }
 
 export function getStoredTmdbKey(): string | null {
@@ -159,4 +198,13 @@ export function getRememberedEmail(): string | null {
 
 export function isKeepLoginEnabled(): boolean {
   return localStorage.getItem(KEEP_LOGIN_KEY) === 'true'
+}
+
+export function getFirebaseAuthRedirectUri(): string | null {
+  const domain =
+    auth.app?.options?.authDomain ??
+    import.meta.env.VITE_FIREBASE_AUTH_DOMAIN ??
+    null
+  if (!domain) return null
+  return `https://${domain}/__/auth/handler`
 }
