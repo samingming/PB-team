@@ -36,21 +36,10 @@ class AuthStateNotifier extends Notifier<AuthStatus> {
 
   Future<UserCredential> signInWithGoogle() async {
     await _googleInit;
-    GoogleSignInAccount googleUser;
-    try {
-      googleUser = await _googleSignIn.authenticate();
-    } on GoogleSignInException catch (e) {
-      if (e.code == GoogleSignInExceptionCode.canceled) {
-        throw StateError('Google sign-in was cancelled');
-      }
-      rethrow;
-    }
+    final googleUser = await _googleSignIn.authenticate();
     final googleAuth = googleUser.authentication;
     if (googleAuth.idToken == null) {
-      throw StateError(
-        'Google sign-in did not return an ID token. '
-        'Check the Google client configuration in firebase/google-services.json.',
-      );
+      throw StateError('Google sign-in did not return an ID token.');
     }
     final credential = GoogleAuthProvider.credential(
       idToken: googleAuth.idToken,

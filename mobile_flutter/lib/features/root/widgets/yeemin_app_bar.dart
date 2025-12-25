@@ -25,13 +25,25 @@ class YeeminAppBar extends ConsumerWidget implements PreferredSizeWidget {
       title: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: () => context.go('/home'),
-        child: Text(
-          'YEEMIN',
-          style: TextStyle(
-            color: _accent,
-            fontWeight: FontWeight.w800,
-            fontSize: 22,
-          ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Image.asset(
+              'assets/logo-yeemin.png',
+              width: 26,
+              height: 26,
+              fit: BoxFit.contain,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'YEEMIN',
+              style: TextStyle(
+                color: _accent,
+                fontWeight: FontWeight.w800,
+                fontSize: 22,
+              ),
+            ),
+          ],
         ),
       ),
       actions: [

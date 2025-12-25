@@ -50,21 +50,19 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyDgAsTi5gpu1bFpXGi1TVQ2cWq2mSMS0rw',
-    appId: '1:309869010872:android:d36d817eb1e31dca46f94d',
-    messagingSenderId: '309869010872',
+    apiKey: 'AIzaSyCS67E7GRIDcnRrFRpfobchPjpIztTk8PQ',
+    appId: '1:380986901872:web:99cbb839cf3067ad46f94d',
+    messagingSenderId: '380986901872',
     projectId: 'pb-team',
     storageBucket: 'pb-team.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyCIkSRKJdVs9jA6Cb7AKcsguH75ZEGzHj4',
-    appId: '1:309869010872:ios:d069b1cdea35b85046f94d',
-    messagingSenderId: '309869010872',
+    apiKey: 'AIzaSyCS67E7GRIDcnRrFRpfobchPjpIztTk8PQ',
+    appId: '1:380986901872:web:99cbb839cf3067ad46f94d',
+    messagingSenderId: '380986901872',
     projectId: 'pb-team',
     storageBucket: 'pb-team.firebasestorage.app',
-    androidClientId: '309869010872-di41gfk86ko8h76b6s3qusqsf44j31po.apps.googleusercontent.com',
-    iosClientId: '309869010872-bhnn27ea4coh4t56q1df737i6amds9bl.apps.googleusercontent.com',
     iosBundleId: 'com.pbteam.app',
   );
 }
