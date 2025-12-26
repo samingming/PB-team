@@ -16,6 +16,7 @@ dist-ssr
 .vscode/*
 !.vscode/extensions.json
 .idea
+*.iml
 .DS_Store
 *.suo
 *.ntvs*
@@ -28,3 +29,14 @@ wsd-movie/
 
 # Env files
 web/.env
+
+# Mobile build artifacts
+mobile/build/
+mobile/.dart_tool/
+mobile/.flutter-plugins
+mobile/.flutter-plugins-dependencies
+mobile/.metadata
+
+# Local tooling and certs
+tools/
+debug-cert.der
