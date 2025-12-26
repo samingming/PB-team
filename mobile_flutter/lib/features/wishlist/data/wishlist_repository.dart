@@ -21,9 +21,11 @@ class WishlistItem {
 
   Map<String, dynamic> toJson() {
     return {
-      'movieId': movieId,
+      // Align schema with web: wishlists/{uid} doc, items array
+      'id': movieId,
       'title': title,
-      'posterUrl': posterUrl,
+      'poster_path': _extractPosterPath(posterUrl),
+      'poster': posterUrl,
       'createdAt': Timestamp.fromDate(createdAt),
     };
   }
@@ -38,6 +40,29 @@ class WishlistItem {
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
     );
   }
+
+  factory WishlistItem.fromMap(Map<String, dynamic> data) {
+    final rawId = data['id'] ?? data['movieId'];
+    final movieId = rawId is int
+        ? rawId
+        : rawId is num
+            ? rawId.toInt()
+            : int.tryParse(rawId?.toString() ?? '') ?? 0;
+    final posterPath = data['poster_path'] as String?;
+    final poster = data['poster'] as String?;
+    final fallback = data['posterUrl'] as String? ?? '';
+    final posterUrl = poster ??
+        (posterPath != null && posterPath.isNotEmpty
+            ? 'https://image.tmdb.org/t/p/w500$posterPath'
+            : fallback);
+    return WishlistItem(
+      id: (data['id'] ?? data['docId'] ?? movieId.toString()).toString(),
+      movieId: movieId,
+      title: data['title'] as String? ?? '',
+      posterUrl: posterUrl,
+      createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+    );
+  }
 }
 
 class WishlistRepository {
@@ -46,35 +71,53 @@ class WishlistRepository {
   final FirebaseFirestore _firestore;
   final FirebaseAuth _auth;
 
-  CollectionReference<Map<String, dynamic>> _colFor(String uid) =>
-      _firestore.collection('wishlist').doc(uid).collection('items');
+  DocumentReference<Map<String, dynamic>> _docFor(String uid) =>
+      _firestore.collection('wishlists').doc(uid);
 
   Stream<List<WishlistItem>> watchWishlist() {
     final uid = _auth.currentUser?.uid;
     if (uid == null) return const Stream.empty();
-    return _colFor(uid).orderBy('createdAt', descending: true).snapshots().map(
-          (snap) => snap.docs.map(WishlistItem.fromDoc).toList(),
-        );
+    return _docFor(uid).snapshots().map((snap) {
+      final items = (snap.data()?['items'] as List<dynamic>? ?? [])
+          .whereType<Map<String, dynamic>>()
+          .map(WishlistItem.fromMap)
+          .toList();
+      items.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return items;
+    });
   }
 
   Future<void> add(int movieId, String title, String posterUrl) async {
     final uid = _auth.currentUser?.uid;
     if (uid == null) throw StateError('Not signed in');
-    await _colFor(uid).add(
-      WishlistItem(
-        id: '',
-        movieId: movieId,
-        title: title,
-        posterUrl: posterUrl,
-        createdAt: DateTime.now(),
-      ).toJson(),
+    final item = WishlistItem(
+      id: movieId.toString(),
+      movieId: movieId,
+      title: title,
+      posterUrl: posterUrl,
+      createdAt: DateTime.now(),
+    ).toJson();
+    await _docFor(uid).set(
+      {
+        'items': FieldValue.arrayUnion([item]),
+      },
+      SetOptions(merge: true),
     );
   }
 
   Future<void> remove(String id) async {
     final uid = _auth.currentUser?.uid;
     if (uid == null) throw StateError('Not signed in');
-    await _colFor(uid).doc(id).delete();
+    final doc = await _docFor(uid).get();
+    final items = (doc.data()?['items'] as List<dynamic>? ?? [])
+        .whereType<Map<String, dynamic>>()
+        .toList();
+    final updated = items.where((e) {
+      final rawId = e['id'] ?? e['movieId'];
+      final match = (rawId ?? '').toString() == id;
+      return !match;
+    }).toList();
+    await _docFor(uid).set({'items': updated}, SetOptions(merge: true));
   }
 }
 
@@ -83,3 +126,10 @@ final wishlistRepositoryProvider = Provider<WishlistRepository>((ref) {
   final auth = ref.watch(firebaseAuthProvider);
   return WishlistRepository(firestore, auth);
 });
+
+String? _extractPosterPath(String? poster) {
+  if (poster == null || poster.isEmpty) return null;
+  final match = RegExp(r'image\.tmdb\.org\/t\/p\/[^/]+(\/.*)$').firstMatch(poster);
+  if (match != null) return match.group(1);
+  return null;
+}

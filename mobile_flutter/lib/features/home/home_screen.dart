@@ -445,7 +445,7 @@ class _MovieCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () => context.go('/movie/${movie.id}'),
+      onTap: () => context.push('/movie/${movie.id}'),
       child: Container(
         width: 150,
         decoration: BoxDecoration(

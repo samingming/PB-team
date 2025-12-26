@@ -74,7 +74,7 @@ class WishlistScreen extends ConsumerWidget {
                       palette: palette,
                       item: item,
                       picked: picked,
-                      onTap: () => context.go('/movie/${item.movieId}'),
+                      onTap: () => context.push('/movie/${item.movieId}'),
                       onWishlistToggle: () =>
                           _toggleWishlist(context, ref, item, wishlistMap),
                     );

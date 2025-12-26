@@ -125,7 +125,7 @@ class _PopularScreenState extends ConsumerState<PopularScreen> {
                       palette: palette,
                       movie: movie,
                       picked: picked,
-                      onTap: () => context.go('/movie/${movie.id}'),
+                      onTap: () => context.push('/movie/${movie.id}'),
                       onToggleWishlist: () => _toggleWishlist(movie),
                     ),
                   );

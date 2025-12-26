@@ -4,9 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app_config.dart';
 
 final dioProvider = Provider<Dio>((ref) {
-  if (AppConfig.tmdbApiKey.isEmpty) {
-    throw StateError('TMDB_API_KEY is missing (--dart-define).');
-  }
   final dio = Dio(
     BaseOptions(
       baseUrl: 'https://api.themoviedb.org/3',

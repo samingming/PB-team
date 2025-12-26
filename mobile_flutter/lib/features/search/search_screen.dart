@@ -445,7 +445,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               palette: palette,
               movie: movie,
               picked: picked,
-              onTap: () => context.go('/movie/${movie.id}'),
+              onTap: () => context.push('/movie/${movie.id}'),
               onWishlistToggle: () => _toggleWishlist(movie, wishlistMap),
             );
           },

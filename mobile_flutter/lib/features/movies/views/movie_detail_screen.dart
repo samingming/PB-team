@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../providers/movie_detail_provider.dart';
 import '../widgets/movie_meta.dart';
 
@@ -13,7 +14,13 @@ class MovieDetailScreen extends ConsumerWidget {
     final detail = ref.watch(movieDetailProvider(id));
 
     return Scaffold(
-      appBar: AppBar(title: const Text('영화 상세 정보')),
+      appBar: AppBar(
+        title: const Text('영화 상세'),
+        leading: IconButton(
+          icon: const Icon(Icons.close),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+      ),
       body: detail.when(
         data: (movie) => SingleChildScrollView(
           padding: const EdgeInsets.all(16),
