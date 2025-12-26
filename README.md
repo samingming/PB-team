@@ -8,6 +8,7 @@
 
 ## 배포
 - Web: GitHub Pages (`gh-pages` 브랜치). URL 예) `https://<your-org>.github.io/PB-team/` (실제 도메인은 리포 소유자 설정 확인).
+- 운영 서버: http://113.198.66.68:10073/
 - Mobile: 스토어 배포 없음. 로컬/CI 빌드만 수행.
 
 ## 환경 변수 / 비밀 키
