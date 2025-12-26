@@ -1,10 +1,22 @@
 # PB Team — Web & Mobile
 
-전체 서비스 개요, 배포, 실행 방법을 모았습니다. 상세한 스택·워크플로우는 각 디렉터리 README를 참고하세요.
+TMDB 기반 영화 탐색/검색 서비스의 웹·모바일 클라이언트입니다. 같은 계정으로 로그인하면 위시리스트를 공유합니다.
 
 ## 구성
 - `web/` : Vue 3 + TS + Vite (Pinia, Axios, TMDB API)
 - `mobile_flutter/` : Flutter + Firebase Auth/Firestore (Riverpod, go_router)
+
+## 주요 기능
+- 공통
+  - TMDB 인기/상영중 목록, 검색, 상세 정보 조회
+  - Firebase Auth 기반 로그인 (모바일은 Google 원탭/플레이 서비스 사용)
+  - 위시리스트: Firestore `wishlists/{uid}` 문서의 `items` 배열을 사용해 웹·모바일 간 동기화
+- Web
+  - 로컬 캐시(Local Storage) 기반 TMDB 응답 캐싱, 검색/위시리스트 상태 유지
+  - GitHub Pages 배포, Vite dev 서버로 로컬 개발
+- Mobile
+  - Google 로그인 지원, 키/설정은 `app_config.dart` 기본값 + `google-services.json`
+  - 탭/스택 내비게이션(go_router), 상세 화면은 push로 열리고 AppBar X로 복귀
 
 ## 배포
 - Web: GitHub Pages (`gh-pages` 브랜치). URL 예) `https://<your-org>.github.io/PB-team/` (실제 도메인은 리포 소유자 설정 확인).
